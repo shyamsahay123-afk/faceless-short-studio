@@ -122,7 +122,16 @@ page = st.sidebar.radio("🧭 Studio Navigator", [
 ])
 
 st.sidebar.divider()
-pexels_api_key = st.sidebar.text_input("🔑 Pexels API Key", type="password", help="Enter your Pexels developer key to automatically fetch real 9:16 vertical stock b-roll videos based on your script!")
+# Load saved Pexels API Key from DB settings permanently so they never have to type it again!
+saved_pexels_key = db.get_setting("pexels_api_key", "")
+pexels_api_key = st.sidebar.text_input(
+    "🔑 Pexels API Key", 
+    type="password", 
+    value=saved_pexels_key,
+    help="Enter your Pexels developer key to automatically fetch real 9:16 vertical stock b-roll videos based on your script!"
+)
+if pexels_api_key != saved_pexels_key:
+    db.set_setting("pexels_api_key", pexels_api_key)
 st.sidebar.divider()
 st.sidebar.markdown("**Upgraded Graphics Engine:**")
 st.sidebar.write("✨ 24fps Animated Abstract Presets")

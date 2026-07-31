@@ -35,6 +35,24 @@ def init_db():
     conn.commit()
     conn.close()
 
+def get_setting(key, default_val):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+    res = c.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    conn.close()
+    if res:
+        return res[0]
+    return default_val
+
+def set_setting(key, value):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    conn.commit()
+    conn.close()
+
 def get_all_channels():
     conn = sqlite3.connect(DB_NAME)
     channels = conn.cursor().execute("SELECT id, channel_name, niche, subscribers, total_shorts, youtube_credentials FROM channels").fetchall()
@@ -584,7 +602,16 @@ st.divider()
 
 page = st.sidebar.radio("🧭 Studio Navigator", ["🎯 Hub & Channels", "🧠 Psychology Lab & Script Creator", "🎬 Premium HD Video Studio", "📺 Creator Video Archive", "🚀 Viral Launch & SEO Hub"])
 st.sidebar.divider()
-pexels_api_key = st.sidebar.text_input("🔑 Pexels API Key", type="password", help="Enter your Pexels developer key to automatically fetch real 9:16 vertical stock b-roll videos based on your script!")
+# Load saved Pexels API Key permanently so they never have to type it again!
+saved_pexels_key = get_setting("pexels_api_key", "")
+pexels_api_key = st.sidebar.text_input(
+    "🔑 Pexels API Key", 
+    type="password", 
+    value=saved_pexels_key,
+    help="Enter your Pexels developer key to automatically fetch real 9:16 vertical stock b-roll videos based on your script!"
+)
+if pexels_api_key != saved_pexels_key:
+    set_setting("pexels_api_key", pexels_api_key)
 
 if page == "🎯 Hub & Channels":
     st.header("📡 Creator Brand Hub")
