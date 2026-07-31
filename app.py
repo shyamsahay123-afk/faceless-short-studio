@@ -138,6 +138,14 @@ st.sidebar.write("✨ 24fps Animated Abstract Presets")
 st.sidebar.write("📸 Smooth Ken Burns Photo Slideshows")
 st.sidebar.write("🏷️ Algorithmic SEO Pack Generator")
 
+# --- Permanent Sidebar Render Button on Video Studio Page ---
+if page == "🎬 Premium HD Video Studio":
+    st.sidebar.divider()
+    st.sidebar.subheader("🎬 AI Video Control")
+    trigger_sidebar_render = st.sidebar.button("🚀 COMPILE & RENDER NOW", type="primary", use_container_width=True)
+else:
+    trigger_sidebar_render = False
+
 # ==============================================================================
 # PAGE 1: HUB & CHANNELS
 # ==============================================================================
@@ -367,7 +375,7 @@ Drop a 🔥 in the comments if you are executing this today!"""
             safe_asset = get_safe_bg_asset(bg_fpath, bg_fallback_color)
             st.image(safe_asset, caption=f"Selected Preset Visual ({safe_asset})", width=200)
             
-            if st.button("🚀 Render 24fps Cinematic Animated Video Now", type="primary", use_container_width=True):
+            if st.button("🚀 Render 24fps Cinematic Animated Video Now", type="primary", use_container_width=True) or trigger_sidebar_render:
                 # Setup real-time visual progress monitoring
                 progress_container = st.container(border=True)
                 with progress_container:
@@ -406,7 +414,7 @@ Drop a 🔥 in the comments if you are executing this today!"""
                         
         elif method.startswith("📸 Method 2"):
             uploaded_photos = st.file_uploader("Upload Presentation Photos (Any resolution)", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
-            if uploaded_photos and st.button("🚀 Render Ken Burns Slideshow Video Now", type="primary", use_container_width=True):
+            if uploaded_photos and (st.button("🚀 Render Ken Burns Slideshow Video Now", type="primary", use_container_width=True) or trigger_sidebar_render):
                 progress_container = st.container(border=True)
                 with progress_container:
                     st.markdown("### 🤖 Live AI Production Console")
@@ -444,7 +452,7 @@ Drop a 🔥 in the comments if you are executing this today!"""
                 
         elif method.startswith("🎞️ Method 3"):
             uploaded_clips = st.file_uploader("Upload Raw Action Clips (.mp4 / .mov)", type=["mp4", "mov"], accept_multiple_files=True)
-            if uploaded_clips and st.button("🚀 Render Action Action Video Now", type="primary", use_container_width=True):
+            if uploaded_clips and (st.button("🚀 Render Action Action Video Now", type="primary", use_container_width=True) or trigger_sidebar_render):
                 progress_container = st.container(border=True)
                 with progress_container:
                     st.markdown("### 🤖 Live AI Production Console")
