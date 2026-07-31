@@ -226,7 +226,84 @@ elif page == "🎬 Premium HD Video Studio":
     st.write("We have upgraded the render engine: Enjoy 100% real moving animated abstract background videos, slow Ken Burns photo zooming, Hormozi centered high-contrast subtitles, and precise neural voiceovers.")
     
     pending_shorts = [s for s in all_shorts if len(s) > 7 and s[7] is None]
-    if not pending_shorts: st.success("🌟 All your stored Shorts already have compiled HD videos! Create a new one in the **Psychology Lab** first!")
+    if not pending_shorts:
+        st.info("💡 You do not have any pending video scripts inside your database.")
+        st.markdown("### 🪄 One-Click Faceless AI Video Generator")
+        st.write("Click the button below to have the AI automatically write a viral psychology-backed script, fetch visual templates, and render a complete vertical video instantly!")
+        
+        if st.button("🪄 Auto-Write & Render Instant AI Video Now", type="primary", use_container_width=True):
+            # Check if brand exists, otherwise add the demo channel
+            if not all_channels:
+                db.add_channel("Elite Mindset Mastery", "Self Improvement & Dark Psychology", "24.5k")
+                all_channels = db.get_all_channels()
+                
+            ch_id = all_channels[0][0]
+            
+            # Preset viral psychology script
+            preset_title = "The 1% Rule of Neuro-Focus 🎯"
+            preset_script = """[0-3 sec HOOK]
+Only the top 1% of highly disciplined minds actually do this one thing. 
+
+[PSYCHOLOGY TRIGGER: Identity Signaling]
+Make the viewer feel they belong to a higher-status group.
+
+[VALUE DELIVERY]
+It is called the Neuro-Focus boundary.
+Harvard studies show that when you lock your screen, your brain enters deep wave mode.
+Step 1: Eliminate the #1 friction point immediately.
+Step 2: Automate your morning.
+Top performers never waste time on cheap scrolling.
+
+[ENGAGEMENT CTA]
+Drop a 🔥 in the comments if you are executing this today!"""
+            
+            # Save to database
+            new_short_id = db.add_short(
+                ch_id, 
+                preset_title, 
+                preset_script, 
+                "Identity Signaling", 
+                f"{preset_title}\n\nNeuro-Focus secret.\n\n#Discipline #Mindset #Shorts", 
+                "discipline, mindset, focus, viral"
+            )
+            
+            # Set up progress
+            progress_container = st.container(border=True)
+            with progress_container:
+                st.markdown("### 🤖 Live AI Production Console")
+                progress_bar = st.progress(0.0)
+                status_indicator = st.status("Initializing AI Video Generator...", expanded=True)
+            
+            def render_progress(pct, text):
+                progress_bar.progress(pct)
+                status_indicator.write(f"🔹 {text} ({int(pct*100)}%)")
+                
+            try:
+                # Compile!
+                v_path, a_path, vtt_path = video.create_video_from_script(
+                    new_short_id, 
+                    preset_script, 
+                    "default_assets/bg_curiosity.jpg", 
+                    "en-US-ChristopherNeural", 
+                    "yellow",
+                    caption_style="word_pop",
+                    bg_music_path="test.mp3",
+                    bg_music_volume=0.12,
+                    show_progress_bar=True,
+                    pexels_api_key=pexels_api_key,
+                    progress_callback=render_progress
+                )
+                status_indicator.update(label="✅ Video Generated Successfully!", state="complete", expanded=False)
+                db.update_short_video(new_short_id, v_path, a_path, vtt_path, status='created')
+                st.success("🎉 Your instant AI video has been rendered flawlessly!"); st.balloons()
+                st.video(v_path)
+                st.rerun()
+            except Exception as e:
+                status_indicator.update(label="❌ Render Failed!", state="error", expanded=True)
+                st.error(f"⚠️ Render failure: {e}")
+                with st.expander("🛠️ Debug Terminal & Crash Log Stack Trace"):
+                    import traceback
+                    st.code(traceback.format_exc())
     else:
         short_options = {s[0]: f"[{s[12] if len(s)>12 else 'Channel'}] {s[2]} (Trigger: {s[4]})" for s in pending_shorts}
         target_short_id = st.selectbox("🎯 Select Pending Short to Compile:", list(short_options.keys()), format_func=lambda x: short_options[x])
