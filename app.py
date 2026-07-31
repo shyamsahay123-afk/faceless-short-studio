@@ -341,9 +341,10 @@ Drop a 🔥 in the comments if you are executing this today!"""
             
         st.subheader("🛠️ Select Upgraded Animation Pipeline")
         method = st.radio("Pipeline Method:", [
-            "✨ Method 1: Cinematic Animated Presets (Auto-renders 24fps moving glowing abstract orbs matching brain triggers)",
-            "📸 Method 2: Custom Slideshow Photos (Applies high-end Ken Burns smooth zoom animation)",
-            "🎞️ Method 3: Raw Video Trimming (Auto-crops/pads user raw clips to perfect 9:16 vertical)"
+            "🤖 Method 1: Fully Automated AI Stock Video (Auto-downloads vertical HD B-roll videos matching your script!)",
+            "✨ Method 2: Cinematic Animated Presets (Auto-renders 24fps moving glowing abstract orbs)",
+            "📸 Method 3: Custom Slideshow Photos (Applies high-end Ken Burns smooth zoom animation)",
+            "🎞️ Method 4: Raw Video Trimming (Auto-crops/pads user raw clips to perfect 9:16 vertical)"
         ])
         
         st.subheader("🎨 Custom Styling Studio")
@@ -369,7 +370,54 @@ Drop a 🔥 in the comments if you are executing this today!"""
             
         st.divider()
         
-        if method.startswith("✨ Method 1"):
+        if method.startswith("🤖 Method 1"):
+            st.info("ℹ️ **Fully Automated AI Stock Video:** This pipeline uses your Pexels API Key to automatically download high-definition vertical stock videos based on keywords in your script. It cuts them every 2.0s under your dynamic subtitles!")
+            
+            # Check Pexels Key
+            if not pexels_api_key or not pexels_api_key.strip():
+                st.warning("⚠️ **Pexels API Key is missing!** Please enter your Pexels developer API Key in the left sidebar to use this automatic video generator, or get a free key from [pexels.com/api/](https://www.pexels.com/api/).")
+                
+            # If triggered, run compiler!
+            if is_render_triggered:
+                if not pexels_api_key or not pexels_api_key.strip():
+                    st.error("❌ Cannot compile: Pexels API Key is required for this automated video generation method!")
+                else:
+                    progress_container = st.container(border=True)
+                    with progress_container:
+                        st.markdown("### 🤖 Live AI Production Console")
+                        progress_bar = st.progress(0.0)
+                        status_indicator = st.status("Initializing AI Render Engines...", expanded=True)
+                    
+                    def render_progress(pct, text):
+                        progress_bar.progress(pct)
+                        status_indicator.write(f"🔹 {text} ({int(pct*100)}%)")
+                    
+                    try:
+                        # 100% PURE POSITIONAL CALL WITH KWARGS!
+                        v_path, a_path, vtt_path = video.create_video_from_script(
+                            target_short_id, 
+                            short_script, 
+                            "default_assets/bg_curiosity.jpg", 
+                            voice_code, 
+                            font_color,
+                            caption_style=caption_style_code,
+                            bg_music_path=bg_music_path,
+                            bg_music_volume=music_volume,
+                            show_progress_bar=show_progress_bar,
+                            pexels_api_key=pexels_api_key,
+                            progress_callback=render_progress
+                        )
+                        status_indicator.update(label="✅ Compilation Complete!", state="complete", expanded=False)
+                        db.update_short_video(target_short_id, v_path, a_path, vtt_path, status='created')
+                        st.success("🎉 Automatic AI Video Rendered Flawlessly!"); st.balloons(); st.video(v_path)
+                    except Exception as e:
+                        status_indicator.update(label="❌ Render Failed!", state="error", expanded=True)
+                        st.error(f"⚠️ Render failure: {e}")
+                        with st.expander("🛠️ Debug Terminal & Crash Log Stack Trace"):
+                            import traceback
+                            st.code(traceback.format_exc())
+                            
+        elif method.startswith("✨ Method 2"):
             bg_choice = st.selectbox("Cinematic Tone Profile:", ["Curiosity Deep Navy Profile", "Success Premium Emerald Profile", "Urgency Crimson Profile", "Story Royal Blue Profile"])
             asset_map = {
                 "Curiosity": ("default_assets/bg_curiosity.jpg", (15, 23, 42)),
@@ -407,7 +455,7 @@ Drop a 🔥 in the comments if you are executing this today!"""
                         bg_music_path=bg_music_path,
                         bg_music_volume=music_volume,
                         show_progress_bar=show_progress_bar,
-                        pexels_api_key=pexels_api_key,
+                        pexels_api_key="", # Disable Pexels for abstract preset Method 2
                         progress_callback=render_progress
                     )
                     status_indicator.update(label="✅ Compilation Complete!", state="complete", expanded=False)
@@ -420,7 +468,7 @@ Drop a 🔥 in the comments if you are executing this today!"""
                         import traceback
                         st.code(traceback.format_exc())
                         
-        elif method.startswith("📸 Method 2"):
+        elif method.startswith("📸 Method 3"):
             uploaded_photos = st.file_uploader("Upload Presentation Photos (Any resolution)", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
             
             photo_paths = []
@@ -464,11 +512,11 @@ Drop a 🔥 in the comments if you are executing this today!"""
                         import traceback
                         st.code(traceback.format_exc())
                 
-        elif method.startswith("🎞️ Method 3"):
+        elif method.startswith("🎞️ Method 4"):
             uploaded_clips = st.file_uploader("Upload Raw Action Clips (.mp4 / .mov)", type=["mp4", "mov"], accept_multiple_files=True)
             if is_render_triggered:
                 if not uploaded_clips:
-                    st.error("⚠️ Please upload some raw action video clips below first to compile using Method 3!")
+                    st.error("⚠️ Please upload some raw action video clips below first to compile using Method 4!")
                 else:
                     progress_container = st.container(border=True)
                     with progress_container:
