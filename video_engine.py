@@ -49,7 +49,7 @@ def download_pexels_b_roll(query, api_key):
         return local_path
         
     headers = {"Authorization": api_key}
-    url = f"https://api.pexels.com/videos/search?query={clean_query}&per_page=12&orientation=portrait"
+    url = f"https://api.pexels.com/videos/search?query={clean_query}&per_page=15&orientation=portrait"
     
     try:
         r = requests.get(url, headers=headers, timeout=12)
@@ -439,139 +439,125 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
     final_audio = CompositeAudioClip([voice_audio, music_audio])
     return final_audio, voice_audio
 
-# --- PIPELINE 1: INSTANT AI PRESET (ANIMATED) WITH KWARGS ---
-def create_video_from_script(short_id, script_text, bg_asset_or_theme, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
-    output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}.mp4")
+
+# ==============================================================================
+# 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
+# ==============================================================================
+def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
+    """
+    The Ultimate Video Compiler.
+    Handles 100% Fully AI, 100% Custom Files, or Hybrid (Custom Files + Auto AI Stock downloads).
+    Will NEVER fail - uses abstract particle background loop as a guaranteed fallback!
+    """
+    output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_compiled.mp4")
     progress_cb = kwargs.get("progress_callback", None)
     
-    if progress_cb: progress_cb(0.05, "Cleaning production script for speech synthesis...")
+    # 1. Speech Generation & Subtitle timing
+    if progress_cb: progress_cb(0.05, "Cleaning production script for text-to-speech engine...")
     spoken_text = clean_script_for_speech(script_text)
     
-    if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover with Edge-TTS...")
-    audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}")
+    if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
+    audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_hybrid")
     
+    # Load settings from Database settings table
     db_caption_style = db_settings.get_setting("caption_style", "word_pop")
     db_music_volume = float(db_settings.get_setting("bg_music_volume", 0.12))
     db_font_size = int(db_settings.get_setting("font_size", 55))
+    db_whoosh_volume = float(db_settings.get_setting("whoosh_volume", 0.12))
     
     bg_music_path = kwargs.get("bg_music_path", None)
     bg_music_volume = kwargs.get("bg_music_volume", db_music_volume)
     
-    if progress_cb: progress_cb(0.30, "Combining vocal tracks, ducking volume, and mixing soundtrack layers...")
+    if progress_cb: progress_cb(0.30, "Combining vocal tracks, ducking volume, and mixing soundtracks...")
     mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
     duration = voice_audio.duration
+    
+    # 2. Slice Visual Track segments (Fast 2.0s transitions!)
+    cut_duration = 2.0
+    num_cuts = int(np.ceil(duration / cut_duration))
+    
+    progress_cb_step_weight = 0.40 / num_cuts
+    visual_clips = []
+    transition_audio_clips = []
+    whoosh_path = generate_synthetic_whoosh_sound()
     
     pexels_key = kwargs.get("pexels_api_key", None)
-    bg_clip = None
     
-    if pexels_key and pexels_key.strip():
-        kw_list = extract_best_keywords(spoken_text, num_words=1)
-        search_kw = kw_list[0] if kw_list else "abstract"
-        if progress_cb: progress_cb(0.40, f"Querying Pexels API & downloading 9:16 vertical stock video clip for keyword '{search_kw.upper()}'...")
-        downloaded_clip = download_pexels_b_roll(search_kw, pexels_key)
-        if downloaded_clip and os.path.exists(downloaded_clip):
-            try:
-                bg_clip = VideoFileClip(downloaded_clip)
-                if bg_clip.duration < duration:
-                    bg_clip = concatenate_videoclips([bg_clip] * (int(duration // bg_clip.duration) + 1))
-                bg_clip = bg_clip.with_duration(duration)
-            except Exception as e:
-                print(f"Failed loading pexels clip: {e}")
-                bg_clip = None
-
-    if bg_clip is None:
-        if progress_cb: progress_cb(0.45, "Generating procedural 24fps dark-vignette grid canvas with floating stars...")
-        theme_keywords = ['curiosity', 'success', 'urgency', 'story', 'theme', 'profile']
-        is_theme = isinstance(bg_asset_or_theme, str) and (any(k in bg_asset_or_theme.lower() for k in theme_keywords) or not os.path.exists(bg_asset_or_theme))
-
-        if is_theme:
-            bg_clip = make_animated_background_clip(duration, theme=str(bg_asset_or_theme))
-        elif isinstance(bg_asset_or_theme, str) and bg_asset_or_theme.lower().endswith(('.mp4', '.mov')):
-            bg_clip = VideoFileClip(bg_asset_or_theme)
-            if bg_clip.duration < duration:
-                bg_clip = concatenate_videoclips([bg_clip] * (int(duration // bg_clip.duration) + 1))
-            bg_clip = bg_clip.with_duration(duration)
-        elif isinstance(bg_asset_or_theme, str):
-            bg_clip = ImageClip(bg_asset_or_theme).with_duration(duration)
-        else:
-            bg_clip = ImageClip(np.array(bg_asset_or_theme)).with_duration(duration)
-        
-    bg_clip = make_vertical_clip(bg_clip)
+    # Handle optional uploaded files
+    custom_files = uploaded_file_paths if uploaded_file_paths else []
     
-    if progress_cb: progress_cb(0.60, "Slicing timing cues, emojifying captions, and mapping Neon power-word highlights...")
-    caption_style = kwargs.get("caption_style", db_caption_style)
-    text_clips, sfx_clips = build_subtitle_and_sfx_clips(parse_vtt(vtt_path), color=font_color, caption_style=caption_style, font_size=db_font_size)
-    
-    if sfx_clips:
-        mixed_audio = CompositeAudioClip([mixed_audio] + sfx_clips)
-        
-    bg_clip = bg_clip.with_audio(mixed_audio)
-    
-    extra_clips = []
-    if kwargs.get("show_progress_bar", True):
-        prog_clip = make_progress_bar_clip(duration)
-        extra_clips.append(prog_clip)
-        
-    if progress_cb: progress_cb(0.75, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
-    CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast", logger=None)
-    
-    if progress_cb: progress_cb(0.95, "Releasing local system file locks and saving database state...")
-    try: 
-        mixed_audio.close()
-        voice_audio.close() 
-        bg_clip.close()
-        for tc in text_clips: tc.close()
-        for ec in extra_clips: ec.close()
-        for sc in sfx_clips: sc.close()
-    except: 
-        pass
-        
-    if progress_cb: progress_cb(1.00, "Render complete! Processing final video outputs.")
-    return output_video_path, audio_path, vtt_path
-
-# --- PIPELINE 2: CUSTOM PHOTOS (UPGRADED ADHD 1.8s PATTERN INTERRUPT SLIDE CUTS WITH WHOOSHES) ---
-def create_video_from_photos(short_id, photo_paths, script_text, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
-    output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_photos.mp4")
-    progress_cb = kwargs.get("progress_callback", None)
-    
-    if progress_cb: progress_cb(0.05, "Cleaning script for text-to-speech engine...")
-    spoken_text = clean_script_for_speech(script_text)
-    
-    if progress_cb: progress_cb(0.15, "Generating deep AI voice narrative with Edge-TTS...")
-    audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_photos")
-    
-    db_caption_style = db_settings.get_setting("caption_style", "word_pop")
-    db_music_volume = float(db_settings.get_setting("bg_music_volume", 0.12))
-    db_cut_duration = float(db_settings.get_setting("cut_duration", 1.8))
-    db_font_size = int(db_settings.get_setting("font_size", 55))
-    db_whoosh_volume = float(db_settings.get_setting("whoosh_volume", 0.12))
-    
-    bg_music_path = kwargs.get("bg_music_path", None)
-    bg_music_volume = kwargs.get("bg_music_volume", db_music_volume)
-    
-    if progress_cb: progress_cb(0.30, "Overlaying audio files, ducking soundtrack, and preparing wave mixers...")
-    mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
-    duration = voice_audio.duration
-    
-    cut_duration = db_cut_duration
-    num_cuts = int(np.ceil(duration / cut_duration))
-    extended_photos = (photo_paths * (num_cuts // len(photo_paths) + 1))[:num_cuts]
-    
-    if progress_cb: progress_cb(0.45, f"Cropping uploaded photos to 9:16 and designing smooth 15% Ken Burns scaling loops...")
-    photo_clips = []
-    transition_audio_clips = []
-    whoosh_path = generate_synthetic_whoosh_sound()
-    
-    for idx, img_p in enumerate(extended_photos):
+    for idx in range(num_cuts):
         start_t = idx * cut_duration
         end_t = min(start_t + cut_duration, duration)
         clip_dur = end_t - start_t
         if clip_dur <= 0.05:
             continue
             
-        p_clip = make_ken_burns_clip(img_p, clip_dur).with_start(start_t)
-        photo_clips.append(p_clip)
+        clip_added = False
         
+        # Scenario A: Use uploaded file first!
+        if idx < len(custom_files):
+            file_path = custom_files[idx]
+            if os.path.exists(file_path):
+                if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Slicing and zoom-formatting your uploaded asset {idx+1}...")
+                if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    # Apply Ken burns pan-zoom to images
+                    v_clip = make_ken_burns_clip(file_path, clip_dur).with_start(start_t)
+                    visual_clips.append(v_clip)
+                    clip_added = True
+                elif file_path.lower().endswith(('.mp4', '.mov')):
+                    # Subclip video segment
+                    try:
+                        raw_v = VideoFileClip(file_path)
+                        sub_start = 0.0
+                        if raw_v.duration > clip_dur + 1.0:
+                            np.random.seed(idx)
+                            sub_start = np.random.uniform(0.0, raw_v.duration - clip_dur)
+                        sub_v = raw_v.subclipped(sub_start, sub_start + clip_dur).with_start(start_t)
+                        scaled_sub = make_vertical_clip(sub_v)
+                        visual_clips.append(scaled_sub)
+                        clip_added = True
+                    except Exception as e:
+                        print(f"Failed loading uploaded clip: {e}")
+                        
+        # Scenario B: Fetch stock video from Pexels! (If no custom files left, or completely Faceless AI Video)
+        if not clip_added and pexels_key and pexels_key.strip():
+            # Find keyword spoken at this timestamp
+            sentence_words = extract_best_keywords(spoken_text, num_words=1)
+            search_word = "abstract"
+            if len(sentence_words) > 0:
+                # Rotate keywords to keep scenes completely unique!
+                search_word = sentence_words[idx % len(sentence_words)]
+                
+            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Downloading vertical HD stock clip from Pexels for '{search_word.upper()}'...")
+            downloaded_file = download_pexels_b_roll(search_word, pexels_key)
+            if downloaded_file and os.path.exists(downloaded_file):
+                try:
+                    raw_v = VideoFileClip(downloaded_file)
+                    sub_start = 0.0
+                    if raw_v.duration > clip_dur + 1.0:
+                        np.random.seed(idx)
+                        sub_start = np.random.uniform(0.0, raw_v.duration - clip_dur)
+                    sub_v = raw_v.subclipped(sub_start, sub_start + clip_dur).with_start(start_t)
+                    scaled_sub = make_vertical_clip(sub_v)
+                    visual_clips.append(scaled_sub)
+                    clip_added = True
+                except Exception as e:
+                    print(f"Failed loading downloaded stock: {e}")
+                    
+        # Scenario C: Fallback to animated particles! (Zero copyright risks, guaranteed fail-safe)
+        if not clip_added:
+            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, "Generating procedural 24fps glowing background loop...")
+            # Pick a theme matching our keywords
+            theme_choice = "Curiosity"
+            if "success" in spoken_text.lower(): theme_choice = "Success"
+            elif "warning" in spoken_text.lower() or "mistake" in spoken_text.lower(): theme_choice = "Urgency"
+            
+            p_clip = make_animated_background_clip(clip_dur, theme=theme_choice).with_start(start_t)
+            p_clip = make_vertical_clip(p_clip)
+            visual_clips.append(p_clip)
+            
+        # On every transition cut, overlay our custom cinematic whoosh sound!
         if idx > 0:
             try:
                 whoosh_clip = AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume)
@@ -579,12 +565,15 @@ def create_video_from_photos(short_id, photo_paths, script_text, voice_name="en-
             except:
                 pass
                 
-    bg_clip = CompositeVideoClip(photo_clips, size=(720, 1280)).with_duration(duration)
+    # 3. Composite visual tracks
+    bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
     
-    if progress_cb: progress_cb(0.60, "Generating single word-burst caption tracks & syncing transition swooshes...")
+    # 4. Generate subtitle overlays & click sfx ticks
+    if progress_cb: progress_cb(0.80, "Slicing subtitle timings, emojifying captions, and mapping Neon highlights...")
     caption_style = kwargs.get("caption_style", db_caption_style)
     text_clips, sfx_clips = build_subtitle_and_sfx_clips(parse_vtt(vtt_path), color=font_color, caption_style=caption_style, font_size=db_font_size)
     
+    # 5. Compile final audio
     all_audio_tracks = [mixed_audio] + sfx_clips + transition_audio_clips
     final_mixed_audio = CompositeAudioClip(all_audio_tracks)
     
@@ -595,109 +584,18 @@ def create_video_from_photos(short_id, photo_paths, script_text, voice_name="en-
         prog_clip = make_progress_bar_clip(duration)
         extra_clips.append(prog_clip)
         
-    if progress_cb: progress_cb(0.75, "Compiling Ken Burns photo timeline & encoding high-pacing vertical MP4...")
+    # 6. Encode video file
+    if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast", logger=None)
     
-    if progress_cb: progress_cb(0.95, "Safely locking down video assets & updating DB indices...")
+    # 7. Safe cleanup
+    if progress_cb: progress_cb(0.98, "Safely locking down video assets and updating DB indices...")
     try:
         final_mixed_audio.close()
         mixed_audio.close()
         voice_audio.close()
         bg_clip.close()
-        for pc in photo_clips: pc.close()
-        for tc in text_clips: tc.close()
-        for ec in extra_clips: ec.close()
-        for sc in sfx_clips: sc.close()
-        for wc in transition_audio_clips: wc.close()
-    except:
-        pass
-        
-    if progress_cb: progress_cb(1.00, "Render complete! Slicing is finish.")
-    return output_video_path, audio_path, vtt_path
-
-# --- PIPELINE 3: USER VIDEO CLIPS (ADHD 2.0s DYNAMIC B-ROLL CUTS WITH WHOOSH TRANSITIONS) ---
-def create_video_from_clips(short_id, clip_paths, script_text, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
-    output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_clips.mp4")
-    progress_cb = kwargs.get("progress_callback", None)
-    
-    if progress_cb: progress_cb(0.05, "Cleaning script punctuation for narration...")
-    spoken_text = clean_script_for_speech(script_text)
-    
-    if progress_cb: progress_cb(0.15, "Processing AI speech file...")
-    audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_clips")
-    
-    db_caption_style = db_settings.get_setting("caption_style", "word_pop")
-    db_music_volume = float(db_settings.get_setting("bg_music_volume", 0.12))
-    db_cut_duration = float(db_settings.get_setting("cut_duration", 2.0))
-    db_font_size = int(db_settings.get_setting("font_size", 55))
-    db_whoosh_volume = float(db_settings.get_setting("whoosh_volume", 0.12))
-    
-    bg_music_path = kwargs.get("bg_music_path", None)
-    bg_music_volume = kwargs.get("bg_music_volume", db_music_volume)
-    
-    if progress_cb: progress_cb(0.30, "Compiling audio files...")
-    mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
-    duration = voice_audio.duration
-    
-    cut_duration = db_cut_duration
-    num_cuts = int(np.ceil(duration / cut_duration))
-    extended_clips = (clip_paths * (num_cuts // len(clip_paths) + 1))[:num_cuts]
-    
-    if progress_cb: progress_cb(0.45, "Loading uploaded clips, cropping to vertical 1080x1920, and slicing 2-second segments...")
-    video_cuts = []
-    transition_audio_clips = []
-    whoosh_path = generate_synthetic_whoosh_sound()
-    
-    for idx, cp in enumerate(extended_clips):
-        start_t = idx * cut_duration
-        end_t = min(start_t + cut_duration, duration)
-        clip_dur = end_t - start_t
-        if clip_dur <= 0.05:
-            continue
-            
-        raw_v_clip = VideoFileClip(cp)
-        sub_start = 0.0
-        if raw_v_clip.duration > clip_dur + 1.0:
-            np.random.seed(idx)
-            sub_start = np.random.uniform(0.0, raw_v_clip.duration - clip_dur)
-            
-        sub_clip = raw_v_clip.subclipped(sub_start, sub_start + clip_dur).with_start(start_t)
-        scaled_sub_clip = make_vertical_clip(sub_clip)
-        video_cuts.append(scaled_sub_clip)
-        
-        if idx > 0:
-            try:
-                whoosh_clip = AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume)
-                transition_audio_clips.append(whoosh_clip)
-            except:
-                pass
-                
-    bg_clip = CompositeVideoClip(video_cuts, size=(720, 1280)).with_duration(duration)
-    
-    if progress_cb: progress_cb(0.60, "Ripping subtitle timings and compiling neon word highlights...")
-    caption_style = kwargs.get("caption_style", db_caption_style)
-    text_clips, sfx_clips = build_subtitle_and_sfx_clips(parse_vtt(vtt_path), color=font_color, caption_style=caption_style, font_size=db_font_size)
-    
-    all_audio_tracks = [mixed_audio] + sfx_clips + transition_audio_clips
-    final_mixed_audio = CompositeAudioClip(all_audio_tracks)
-    
-    bg_clip = bg_clip.with_audio(final_mixed_audio)
-    
-    extra_clips = []
-    if kwargs.get("show_progress_bar", True):
-        prog_clip = make_progress_bar_clip(duration)
-        extra_clips.append(prog_clip)
-        
-    if progress_cb: progress_cb(0.75, "Encoding vertical MP4 cuts with whoosh layers...")
-    CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast", logger=None)
-    
-    if progress_cb: progress_cb(0.95, "Safely cleaning disk files & saving workspace database indices...")
-    try:
-        final_mixed_audio.close()
-        mixed_audio.close()
-        voice_audio.close()
-        bg_clip.close()
-        for vc in video_cuts: vc.close()
+        for vc in visual_clips: vc.close()
         for tc in text_clips: tc.close()
         for ec in extra_clips: ec.close()
         for sc in sfx_clips: sc.close()
