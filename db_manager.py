@@ -185,5 +185,24 @@ def delete_short(short_id):
     conn.commit()
     conn.close()
 
+# --- Settings & Optimization Operations ---
+def get_setting(key, default_val):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+    res = c.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    conn.close()
+    if res:
+        return res[0]
+    return default_val
+
+def set_setting(key, value):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    conn.commit()
+    conn.close()
+
 if __name__ == "__main__":
     init_db()

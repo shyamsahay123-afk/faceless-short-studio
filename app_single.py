@@ -6,7 +6,7 @@ import sqlite3
 import streamlit as st
 from PIL import Image, ImageDraw
 from moviepy import (
-    VideoClip, ImageClip, VideoFileClip, AudioFileClip, CompositeVideoClip, TextClip, concatenate_videoclips
+    VideoClip, ImageClip, VideoFileClip, AudioFileClip, CompositeVideoClip, TextClip, concatenate_videoclips, CompositeAudioClip, concatenate_audioclips
 )
 
 # --- DIRECTORIES ---
@@ -156,10 +156,28 @@ TRIGGER_HOOK_TEMPLATES = {
 # ==============================================================================
 def make_animated_background_clip(duration, theme="Curiosity"):
     width, height = 720, 1280
-    if "success" in theme.lower(): c1, c2, orb_color = (6, 78, 59), (15, 23, 42), (16, 185, 129)
-    elif "urgency" in theme.lower(): c1, c2, orb_color = (127, 29, 29), (15, 23, 42), (239, 68, 68)
-    elif "story" in theme.lower(): c1, c2, orb_color = (30, 58, 138), (15, 23, 42), (59, 130, 246)
-    else: c1, c2, orb_color = (15, 23, 42), (88, 28, 135), (168, 85, 247)
+    theme_str = str(theme).lower()
+    
+    if "success" in theme_str or "emerald" in theme_str:
+        c1, c2, orb_color = (6, 78, 59), (15, 23, 42), (16, 185, 129)
+    elif "urgency" in theme_str or "crimson" in theme_str:
+        c1, c2, orb_color = (127, 29, 29), (15, 23, 42), (239, 68, 68)
+    elif "story" in theme_str or "blue" in theme_str:
+        c1, c2, orb_color = (30, 58, 138), (15, 23, 42), (59, 130, 246)
+    else:
+        c1, c2, orb_color = (15, 23, 42), (88, 28, 135), (168, 85, 247)
+
+    # Pre-generate 35 static particles to draw programmatically
+    np.random.seed(42)
+    particles = []
+    for _ in range(35):
+        particles.append({
+            'x_pct': np.random.rand(),
+            'y_start_pct': np.random.rand(),
+            'speed': 0.04 + 0.08 * np.random.rand(),
+            'size': 2 + int(4 * np.random.rand()),
+            'opacity': 40 + int(120 * np.random.rand())
+        })
 
     base_img = Image.new("RGB", (width, height))
     base_draw = ImageDraw.Draw(base_img)
@@ -172,11 +190,42 @@ def make_animated_background_clip(duration, theme="Curiosity"):
     def make_frame(t):
         img = base_img.copy()
         draw = ImageDraw.Draw(img, "RGBA")
-        cx1, cy1, rad1 = 360 + int(180 * np.sin(t * 1.3)), 550 + int(120 * np.cos(t * 0.9)), 180 + int(30 * np.sin(t * 2.5))
-        draw.ellipse([cx1 - rad1, cy1 - rad1, cx1 + rad1, cy1 + rad1], fill=(orb_color[0], orb_color[1], orb_color[2], 70))
-        cx2, cy2, rad2 = 360 + int(220 * np.cos(t * 1.1)), 850 + int(160 * np.sin(t * 0.7)), 200
-        draw.ellipse([cx2 - rad2, cy2 - rad2, cx2 + rad2, cy2 + rad2], fill=(255, 255, 255, 25))
-        draw.rectangle([18, 18, width-18, height-18], outline=(255, 255, 255, 50), width=2)
+        
+        # 1. Draw subtle grid
+        grid_color = (255, 255, 255, 10)
+        for gx in range(1, 6):
+            draw.line([(gx * 120, 0), (gx * 120, height)], fill=grid_color, width=1)
+        for gy in range(1, 10):
+            draw.line([(0, gy * 128), (width, gy * 128)], fill=grid_color, width=1)
+            
+        # 2. Draw floating stars/dust
+        for p in particles:
+            x = int(p['x_pct'] * width)
+            y = int(((p['y_start_pct'] - p['speed'] * t) % 1.0) * height)
+            rad = p['size']
+            draw.ellipse([x - rad, y - rad, x + rad, y + rad], fill=(orb_color[0], orb_color[1], orb_color[2], p['opacity']))
+            if rad > 3:
+                draw.ellipse([x - rad - 2, y - rad - 2, x + rad + 2, y + rad + 2], fill=(orb_color[0], orb_color[1], orb_color[2], int(p['opacity'] * 0.4)))
+        
+        # 3. Draw huge background glowing soft blobs
+        cx1 = 360 + int(140 * np.sin(t * 1.1))
+        cy1 = 550 + int(90 * np.cos(t * 0.8))
+        rad1 = 180 + int(20 * np.sin(t * 2.0))
+        draw.ellipse([cx1 - rad1, cy1 - rad1, cx1 + rad1, cy1 + rad1], fill=(orb_color[0], orb_color[1], orb_color[2], 55))
+        
+        cx2 = 360 + int(180 * np.cos(t * 0.9))
+        cy2 = 800 + int(110 * np.sin(t * 0.6))
+        rad2 = 210
+        draw.ellipse([cx2 - rad2, cy2 - rad2, cx2 + rad2, cy2 + rad2], fill=(255, 255, 255, 20))
+
+        # 4. Draw vignette
+        for border in range(0, 160, 10):
+            opacity = int(((border / 160) ** 2) * 150)
+            draw.rectangle([border, border, width-border, height-border], outline=(0, 0, 0, opacity), width=10)
+
+        # 5. Neon outline border
+        draw.rectangle([18, 18, width-18, height-18], outline=(255, 255, 255, 35), width=2)
+        
         return np.array(img)
 
     return VideoClip(make_frame, duration=duration)
@@ -229,55 +278,238 @@ def make_vertical_clip(clip, target_w=720, target_h=1280):
     if (w / h) > (target_w / target_h): return clip.resized(height=target_h).cropped(x_center=int(clip.size[0] / 2), width=target_w)
     else: return clip.resized(width=target_w).cropped(y_center=int(clip.size[1] / 2), height=target_h)
 
-def build_subtitle_clips(subtitles, target_w=720, font_size=55, color='yellow'):
+# --- DYNAMIC WORD-BY-WORD CHOPPER ---
+def split_subtitles_into_words(subtitles, words_per_clip=1):
+    word_subs = []
+    for sub in subtitles:
+        text = sub['text'].strip()
+        words = text.split()
+        if not words:
+            continue
+        
+        total_chars = sum(len(w) for w in words)
+        start_time = sub['start']
+        total_duration = sub['end'] - sub['start']
+        
+        i = 0
+        while i < len(words):
+            group = words[i:i+words_per_clip]
+            group_text = " ".join(group)
+            group_chars = sum(len(w) for w in group)
+            
+            if total_chars > 0:
+                group_dur = (group_chars / total_chars) * total_duration
+            else:
+                group_dur = total_duration / (len(words) / words_per_clip)
+                
+            group_start = start_time
+            group_end = start_time + group_dur
+            
+            if group_end > sub['end']:
+                group_end = sub['end']
+                
+            if group_dur > 0.02:
+                word_subs.append({
+                    'start': group_start,
+                    'end': group_end,
+                    'text': group_text.upper() # Uppercase bold captions!
+                })
+            
+            start_time = group_end
+            i += words_per_clip
+            
+    return word_subs
+
+# --- CINEMATIC VISUAL PROGRESS BAR OVERLAY ---
+def make_progress_bar_clip(duration, width=720, height=1280, bar_height=10, bar_color=(255, 45, 85)):
+    def make_frame(t):
+        img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img, "RGBA")
+        
+        pct = min(t / duration, 1.0)
+        progress_w = int(pct * width)
+        
+        if progress_w > 0:
+            draw.rectangle(
+                [0, height - bar_height, progress_w, height], 
+                fill=(bar_color[0], bar_color[1], bar_color[2], 230)
+            )
+            if progress_w > 5:
+                draw.rectangle(
+                    [0, height - bar_height - 2, progress_w, height - bar_height], 
+                    fill=(bar_color[0], bar_color[1], bar_color[2], 100)
+                )
+        return np.array(img)
+    return VideoClip(make_frame, duration=duration)
+
+# --- UPGRADED CAPTIONS GENERATOR ---
+def build_subtitle_clips_upgraded(subtitles, target_w=720, font_size=55, color='yellow', caption_style='standard'):
+    display_subs = subtitles
+    actual_font_size = font_size
+    
+    if caption_style == 'word_pop':
+        display_subs = split_subtitles_into_words(subtitles, words_per_clip=1)
+        actual_font_size = int(font_size * 1.35)
+        
     text_clips = []
-    for s in subtitles:
-        if (s['end'] - s['start']) <= 0.05: continue
-        txt_clip = TextClip(text=s['text'], font_size=font_size, color=color, stroke_color='black', stroke_width=3, method='caption', size=(target_w - 60, None), text_align='center')
-        text_clips.append(txt_clip.with_duration(s['end'] - s['start']).with_start(s['start']).with_position(('center', 'center')))
+    for s in display_subs:
+        duration = s['end'] - s['start']
+        if duration <= 0.05: continue
+        
+        txt_clip = TextClip(
+            text=s['text'], 
+            font_size=actual_font_size, 
+            color=color, 
+            stroke_color='black', 
+            stroke_width=4, 
+            method='caption', 
+            size=(target_w - 80, None), 
+            text_align='center'
+        )
+        text_clips.append(
+            txt_clip.with_duration(duration)
+                    .with_start(s['start'])
+                    .with_position(('center', 0.55))
+        )
     return text_clips
 
-def create_video_from_script(short_id, script_text, theme_name, voice_name="en-US-ChristopherNeural", font_color='yellow'):
+def build_subtitle_clips(subtitles, target_w=720, font_size=55, color='yellow'):
+    return build_subtitle_clips_upgraded(subtitles, target_w, font_size, color, caption_style='standard')
+
+# --- SMART BACKGROUND AUDIO MIXER ---
+def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.10):
+    voice_audio = AudioFileClip(voice_audio_path)
+    
+    if not bg_music_path or not os.path.exists(bg_music_path):
+        return voice_audio, voice_audio
+        
+    music_audio = AudioFileClip(bg_music_path)
+    
+    voice_audio = voice_audio.with_volume_scaled(1.0)
+    music_audio = music_audio.with_volume_scaled(bg_music_volume)
+    
+    duration = voice_audio.duration
+    if music_audio.duration < duration:
+        loops_needed = int(np.ceil(duration / music_audio.duration))
+        music_audio = concatenate_audioclips([music_audio] * loops_needed)
+        
+    music_audio = music_audio.with_duration(duration)
+    final_audio = CompositeAudioClip([voice_audio, music_audio])
+    return final_audio, voice_audio
+
+# --- PIPELINE 1: INSTANT AI PRESET (ANIMATED) WITH KWARGS ---
+def create_video_from_script(short_id, script_text, theme_name, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
     output_video_path = os.path.join("video_output", f"short_{short_id}.mp4")
     spoken_text = clean_script_for_speech(script_text)
     audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}")
-    audio = AudioFileClip(audio_path)
     
-    bg_clip = make_animated_background_clip(audio.duration, theme=theme_name).with_audio(audio)
-    text_clips = build_subtitle_clips(parse_vtt(vtt_path), color=font_color)
-    CompositeVideoClip([bg_clip] + text_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast")
-    try: audio.close(); bg_clip.close()
-    except: pass
+    bg_music_path = kwargs.get("bg_music_path", None)
+    bg_music_volume = kwargs.get("bg_music_volume", 0.10)
+    mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
+    duration = voice_audio.duration
+    
+    bg_clip = make_animated_background_clip(duration, theme=theme_name).with_audio(mixed_audio)
+    bg_clip = make_vertical_clip(bg_clip)
+    
+    caption_style = kwargs.get("caption_style", "standard")
+    text_clips = build_subtitle_clips_upgraded(parse_vtt(vtt_path), color=font_color, caption_style=caption_style)
+    
+    extra_clips = []
+    if kwargs.get("show_progress_bar", True):
+        prog_clip = make_progress_bar_clip(duration)
+        extra_clips.append(prog_clip)
+        
+    CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast")
+    
+    try:
+        mixed_audio.close()
+        voice_audio.close()
+        bg_clip.close()
+        for tc in text_clips: tc.close()
+        for ec in extra_clips: ec.close()
+    except:
+        pass
+        
     return output_video_path, audio_path, vtt_path
 
-def create_video_from_photos(short_id, photo_paths, script_text, voice_name="en-US-ChristopherNeural", font_color='yellow'):
+# --- PIPELINE 2: CUSTOM PHOTOS (KEN BURNS ANIMATED) ---
+def create_video_from_photos(short_id, photo_paths, script_text, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
     output_video_path = os.path.join("video_output", f"short_{short_id}_photos.mp4")
     spoken_text = clean_script_for_speech(script_text)
     audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_photos")
-    audio = AudioFileClip(audio_path)
     
-    photo_duration = audio.duration / len(photo_paths)
+    bg_music_path = kwargs.get("bg_music_path", None)
+    bg_music_volume = kwargs.get("bg_music_volume", 0.10)
+    mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
+    duration = voice_audio.duration
+    
+    photo_duration = duration / len(photo_paths)
     photo_clips = [make_ken_burns_clip(p, photo_duration) for p in photo_paths]
         
-    bg_clip = concatenate_videoclips(photo_clips).with_audio(audio).with_duration(audio.duration)
-    text_clips = build_subtitle_clips(parse_vtt(vtt_path), color=font_color)
-    CompositeVideoClip([bg_clip] + text_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast")
+    bg_clip = concatenate_videoclips(photo_clips).with_audio(mixed_audio).with_duration(duration)
+    bg_clip = make_vertical_clip(bg_clip)
+    
+    caption_style = kwargs.get("caption_style", "standard")
+    text_clips = build_subtitle_clips_upgraded(parse_vtt(vtt_path), color=font_color, caption_style=caption_style)
+    
+    extra_clips = []
+    if kwargs.get("show_progress_bar", True):
+        prog_clip = make_progress_bar_clip(duration)
+        extra_clips.append(prog_clip)
+        
+    CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast")
+    
+    try:
+        mixed_audio.close()
+        voice_audio.close()
+        bg_clip.close()
+        for pc in photo_clips: pc.close()
+        for tc in text_clips: tc.close()
+        for ec in extra_clips: ec.close()
+    except:
+        pass
+        
     return output_video_path, audio_path, vtt_path
 
-def create_video_from_clips(short_id, clip_paths, script_text, voice_name="en-US-ChristopherNeural", font_color='yellow'):
+# --- PIPELINE 3: USER VIDEO CLIPS ---
+def create_video_from_clips(short_id, clip_paths, script_text, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
     output_video_path = os.path.join("video_output", f"short_{short_id}_clips.mp4")
     spoken_text = clean_script_for_speech(script_text)
     audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_clips")
-    audio = AudioFileClip(audio_path)
+    
+    bg_music_path = kwargs.get("bg_music_path", None)
+    bg_music_volume = kwargs.get("bg_music_volume", 0.10)
+    mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
+    duration = voice_audio.duration
     
     raw_clips = [make_vertical_clip(VideoFileClip(cp)) for cp in clip_paths]
     combined_bg = concatenate_videoclips(raw_clips)
-    if combined_bg.duration < audio.duration:
-        combined_bg = concatenate_videoclips([combined_bg] * (int(audio.duration // combined_bg.duration) + 1))
     
-    combined_bg = combined_bg.with_duration(audio.duration).with_audio(audio)
-    text_clips = build_subtitle_clips(parse_vtt(vtt_path), color=font_color)
-    CompositeVideoClip([combined_bg] + text_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast")
+    if combined_bg.duration < duration:
+        combined_bg = concatenate_videoclips([combined_bg] * (int(duration // combined_bg.duration) + 1))
+    
+    combined_bg = combined_bg.with_duration(duration).with_audio(mixed_audio)
+    
+    caption_style = kwargs.get("caption_style", "standard")
+    text_clips = build_subtitle_clips_upgraded(parse_vtt(vtt_path), color=font_color, caption_style=caption_style)
+    
+    extra_clips = []
+    if kwargs.get("show_progress_bar", True):
+        prog_clip = make_progress_bar_clip(duration)
+        extra_clips.append(prog_clip)
+        
+    CompositeVideoClip([combined_bg] + text_clips + extra_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast")
+    
+    try:
+        mixed_audio.close()
+        voice_audio.close()
+        combined_bg.close()
+        for rc in raw_clips: rc.close()
+        for tc in text_clips: tc.close()
+        for ec in extra_clips: ec.close()
+    except:
+        pass
+        
     return output_video_path, audio_path, vtt_path
 
 # ==============================================================================
@@ -295,7 +527,16 @@ def generate_viral_seo_pack(title, spoken_script, niche, trigger):
     hashtags_str = f"#{niche_clean} #Shorts #ViralVideo #Psychology #{trigger_clean} #Success"
     optimized_title = f"{title[:85]} 🎯" if not title.endswith("🎯") else title[:90]
 
-    optimized_desc = f"""{optimized_title}\n\n{spoken_script}\n\nHere is exactly why this psychology secret works:\nWhen you use the [{trigger}] mechanism, you build undeniable leverage in {niche}. Stop acting like amateur performers—build an elite mindset today.\n\n🔔 Hit Subscribe to join the top 1% dominating {niche}!\n\n{hashtags_str}"""
+    optimized_desc = f"""{optimized_title}
+
+{spoken_script}
+
+Here is exactly why this psychology secret works:
+When you use the [{trigger}] mechanism, you build undeniable leverage in {niche}. Stop acting like amateur performers—build an elite mindset today.
+
+🔔 Hit Subscribe to join the top 1% dominating {niche}!
+
+{hashtags_str}"""
     return {"title": optimized_title, "description": optimized_desc, "tags": tags_str, "hashtags": hashtags_str}
 
 # ==============================================================================
@@ -310,6 +551,14 @@ st.markdown("""
     .badge-idea { background-color: #3182CE; }
     .badge-created { background-color: #38A169; }
     .badge-uploaded { background-color: #805AD5; }
+    /* Prevent selectbox dropdown navigation from scrolling the main page */
+    div[role="listbox"] {
+        max-height: 250px !important;
+        overflow-y: auto !important;
+    }
+    html {
+        scroll-behavior: smooth !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -334,6 +583,8 @@ col4.metric("🚀 Live Publications", len([s for s in all_shorts if len(s)>11 an
 st.divider()
 
 page = st.sidebar.radio("🧭 Studio Navigator", ["🎯 Hub & Channels", "🧠 Psychology Lab & Script Creator", "🎬 Premium HD Video Studio", "📺 Creator Video Archive", "🚀 Viral Launch & SEO Hub"])
+st.sidebar.divider()
+pexels_api_key = st.sidebar.text_input("🔑 Pexels API Key", type="password", help="Enter your Pexels developer key to automatically fetch real 9:16 vertical stock b-roll videos based on your script!")
 
 if page == "🎯 Hub & Channels":
     st.header("📡 Creator Brand Hub")
@@ -400,9 +651,27 @@ elif page == "🎬 Premium HD Video Studio":
             
         method = st.radio("Pipeline Method:", ["✨ Method 1: Cinematic Animated Presets (24fps moving abstract glowing orbs)", "📸 Method 2: Custom Slideshow Photos (Ken Burns smooth zoom animation)", "🎞️ Method 3: Raw Video Trimming (Auto-scales user action clips to perfect 9:16 vertical)"])
         
-        c1, c2, _ = st.columns(3)
-        voice = c1.selectbox("🔊 AI Voice", ["en-US-ChristopherNeural (Elite Deep Male)", "en-US-GuyNeural (Energetic Crisp Male)", "en-US-AriaNeural (Warm Professional Female)"]).split(" ")[0]
-        font_color = c2.selectbox("🔤 Caption Color", ["yellow", "white", "cyan", "green", "red", "magenta"])
+        st.subheader("🎨 Custom Styling Studio")
+        col_c1, col_c2, col_c3 = st.columns(3)
+        ai_voice = col_c1.selectbox("🔊 AI Narrator Voice", ["en-US-ChristopherNeural (Elite Deep Male)", "en-US-GuyNeural (Energetic Crisp Male)", "en-US-AriaNeural (Warm Professional Female)", "en-GB-SoniaNeural (Elegant British Female)"])
+        font_color = col_c2.selectbox("🔤 Dynamic Caption Color", ["yellow", "white", "cyan", "green", "red", "magenta"])
+        cap_style = col_c3.selectbox("🔤 Subtitle Style", ["🔥 Word-Pop (Hormozi style)", "Full Sentence (Standard)"])
+        
+        caption_style_code = "word_pop" if "Word-Pop" in cap_style else "standard"
+        voice_code = ai_voice.split(" ")[0]
+        
+        st.markdown("**🎵 Background Audio & Overlays:**")
+        col_m1, col_m2, col_m3 = st.columns(3)
+        music_sel = col_m1.selectbox("🎵 Soundtrack", ["None", "Dramatic Beats (test.mp3)", "Atmospheric Ambient (backup.mp3)"])
+        music_volume = col_m2.slider("🎵 Volume Scale", min_value=0.0, max_value=0.30, value=0.12, step=0.01, format="%.2f")
+        show_progress_bar = col_m3.checkbox("🚨 Show Progress Bar (Glowing Crimson)", value=True)
+        
+        bg_music_path = None
+        if "test.mp3" in music_sel:
+            bg_music_path = "test.mp3"
+        elif "backup.mp3" in music_sel:
+            bg_music_path = "backup.mp3"
+            
         st.divider()
         
         if method.startswith("✨ Method 1"):
@@ -410,7 +679,18 @@ elif page == "🎬 Premium HD Video Studio":
             if st.button("🚀 Render 24fps Cinematic Animated Video Now", type="primary", use_container_width=True):
                 with st.spinner("Generating AI Voice, WebVTT timings, computing 24fps visual animation frames, and compiling MP4..."):
                     try:
-                        v_path, a_path, vtt_path = create_video_from_script(s_id, script, bg_choice, voice, font_color)
+                        v_path, a_path, vtt_path = create_video_from_script(
+                            s_id, 
+                            script, 
+                            bg_choice, 
+                            voice_code, 
+                            font_color,
+                            caption_style=caption_style_code,
+                            bg_music_path=bg_music_path,
+                            bg_music_volume=music_volume,
+                            show_progress_bar=show_progress_bar,
+                            pexels_api_key=pexels_api_key
+                        )
                         update_short_video(s_id, v_path, a_path, vtt_path); st.success("🎉 Rendered Flawlessly!"); st.balloons(); st.video(v_path)
                     except Exception as e: st.error(f"Render Error: {e}")
                         
@@ -420,7 +700,17 @@ elif page == "🎬 Premium HD Video Studio":
                 with st.spinner("Saving images, generating audio, applying Ken Burns zoom, and rendering final MP4..."):
                     photo_paths = [save_uploaded_file(p) for p in photos]
                     try:
-                        v_path, a_path, vtt_path = create_video_from_photos(s_id, photo_paths, script, voice, font_color)
+                        v_path, a_path, vtt_path = create_video_from_photos(
+                            s_id, 
+                            photo_paths, 
+                            script, 
+                            voice_code, 
+                            font_color,
+                            caption_style=caption_style_code,
+                            bg_music_path=bg_music_path,
+                            bg_music_volume=music_volume,
+                            show_progress_bar=show_progress_bar
+                        )
                         update_short_video(s_id, v_path, a_path, vtt_path); st.success("🎉 Ken Burns Video Rendered Flawlessly!"); st.video(v_path)
                     except Exception as e: st.error(f"Render Error: {e}")
 
@@ -430,7 +720,17 @@ elif page == "🎬 Premium HD Video Studio":
                 with st.spinner("Trimming clips, scaling to perfect vertical 1080x1920, and compiling MP4..."):
                     clip_paths = [save_uploaded_file(c) for c in clips]
                     try:
-                        v_path, a_path, vtt_path = create_video_from_clips(s_id, clip_paths, script, voice, font_color)
+                        v_path, a_path, vtt_path = create_video_from_clips(
+                            s_id, 
+                            clip_paths, 
+                            script, 
+                            voice_code, 
+                            font_color,
+                            caption_style=caption_style_code,
+                            bg_music_path=bg_music_path,
+                            bg_music_volume=music_volume,
+                            show_progress_bar=show_progress_bar
+                        )
                         update_short_video(s_id, v_path, a_path, vtt_path); st.success("🎉 Action Video Rendered Flawlessly!"); st.video(v_path)
                     except Exception as e: st.error(f"Render Error: {e}")
 
