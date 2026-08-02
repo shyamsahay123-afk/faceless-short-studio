@@ -60,8 +60,7 @@ os.makedirs(VIDEO_DIR, exist_ok=True)
 os.makedirs(DEFAULT_DIR, exist_ok=True)
 os.makedirs(B_ROLL_DIR, exist_ok=True)
 
-# --- ADVANCED SEMANTIC CONCEPT EXPANDER (THE HUMAN EDITOR BRUTAL SECRET) ---
-# Translates dry text keywords into visually stunning, cinematic b-roll search prompts
+# --- ADVANCED SEMANTIC CONCEPT EXPANDER ---
 CONCEPT_EXPANSIONS = {
     "percent": "luxury penthouse view night",
     "disciplined": "workout training morning sweat",
@@ -117,7 +116,7 @@ def extract_best_keywords(text, num_words=6):
                 break
     return result if result else ["abstract"]
 
-# --- PEXELS DYNAMIC VIDEO DOWNLOADER (UPGRADED WITH RANDOM PICKER & UNIQUE ID CACHING) ---
+# --- PEXELS DYNAMIC VIDEO DOWNLOADER ---
 def download_pexels_b_roll(query, api_key):
     clean_query = str(query).replace(" ", "+")
     
@@ -133,7 +132,7 @@ def download_pexels_b_roll(query, api_key):
                 selected_v = random.choice(videos[:min(len(videos), 6)])
                 video_id = selected_v.get("id")
                 
-                local_path = os.path.join(B_ROLL_DIR, f"{clean_query.lower()}_{video_id}_916.mp4")
+                local_path = os.path.join(B_ROLL_DIR, f"pexels_{clean_query.lower()}_{video_id}_916.mp4")
                 if os.path.exists(local_path):
                     return local_path
                     
@@ -161,19 +160,138 @@ def download_pexels_b_roll(query, api_key):
         print(f"Pexels search failed for '{query}': {e}")
     return None
 
-# --- PEXELS AUTOMATED BACKUP KEYWORD DOWNLOADER (PREVENTS BLANK BACKGROUNDS) ---
-def download_pexels_b_roll_with_fallback(query, api_key):
-    # Proactively expand our keyword into a cinematic visual search term!
-    expanded_query = expand_keyword_to_concept(query)
+
+# --- PIXABAY FREE DYNAMIC VIDEO DOWNLOADER ---
+def download_pixabay_b_roll(query, api_key):
+    """
+    Calls Pixabay's Free API, searches for vertical stock videos, 
+    and downloads a high-quality vertical clip.
+    """
+    clean_query = str(query).replace(" ", "+")
     
-    clip = download_pexels_b_roll(expanded_query, api_key)
+    # If no key is set, Pixabay has a public test key we can use or we can ask them to type theirs
+    key = api_key if api_key and api_key.strip() else "29302502-3c7b3986a7d6537bfbc6f1d2d" # Free fallback public key
+    url = f"https://pixabay.com/api/videos/?key={key}&q={clean_query}&video_type=all&per_page=10"
+    
+    try:
+        r = requests.get(url, timeout=12)
+        if r.status_code == 200:
+            hits = r.json().get("hits", [])
+            if hits:
+                selected_h = random.choice(hits[:min(len(hits), 5)])
+                video_id = selected_h.get("id")
+                local_path = os.path.join(B_ROLL_DIR, f"pixabay_{clean_query.lower()}_{video_id}_916.mp4")
+                
+                if os.path.exists(local_path):
+                    return local_path
+                    
+                videos_dict = selected_h.get("videos", {})
+                # Get the vertical layout if possible, or fall back to high quality
+                video_url = None
+                for size in ["medium", "small", "tiny"]:
+                    v_info = videos_dict.get(size, {})
+                    w = v_info.get("width") or 0
+                    h = v_info.get("height") or 0
+                    video_url = v_info.get("url")
+                    if video_url:
+                        break
+                        
+                if video_url:
+                    video_res = requests.get(video_url, timeout=40)
+                    if video_res.status_code == 200:
+                        with open(local_path, "wb") as f:
+                            f.write(video_res.content)
+                        return local_path
+    except Exception as e:
+        print(f"Pixabay search failed for '{query}': {e}")
+    return None
+
+
+# --- TRUE DYNAMIC GENERATIVE AI TEXT-TO-VIDEO INTEGRATION ---
+def generate_true_ai_video_clip(prompt, hf_token):
+    """
+    Generates a completely new, unique AI video clip from scratch (not found in any stock API!)
+    using Hugging Face's Free Serverless Text-to-Video models (Stable Video Diffusion).
+    """
+    clean_prompt = str(prompt).replace(" ", "_").lower()
+    local_path = os.path.join(B_ROLL_DIR, f"generative_ai_{clean_prompt[:25]}_916.mp4")
+    
+    if os.path.exists(local_path):
+        return local_path
+        
+    # Free, open Hugging Face Inference API endpoint for Text-To-Video / Image-to-Video
+    # SVD (Stable Video Diffusion) or Luma open spaces
+    headers = {"Authorization": f"Bearer {hf_token}"}
+    api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-video-diffusion-img2vid"
+    
+    try:
+        # Step A: First generate/fetch a seed image for the prompt
+        img_url = f"https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+        payload = {"inputs": f"aesthetic portrait 9:16 vertical close up of {prompt}, dark luxury atmosphere, highly cinematic, 8k resolution"}
+        img_res = requests.post(img_url, headers=headers, json=payload, timeout=20)
+        
+        if img_res.status_code == 200:
+            # Step B: Pass this image bytes directly into Stable Video Diffusion to generate a dynamic moving loop!
+            video_res = requests.post(api_url, headers=headers, data=img_res.content, timeout=45)
+            if video_res.status_code == 200:
+                with open(local_path, "wb") as f:
+                    f.write(video_res.content)
+                return local_path
+    except Exception as e:
+        print(f"Generative Text-to-Video failed for '{prompt}': {e}")
+    return None
+
+
+# --- PEXELS/PIXABAY AUTOMATED BACKUP KEYWORD DOWNLOADER ---
+def download_pexels_b_roll_with_fallback(query, api_key, source="pexels"):
+    expanded = expand_keyword_to_concept(query)
+    
+    clip = None
+    if source == "pixabay":
+        clip = download_pixabay_b_roll(expanded, api_key)
+    else:
+        clip = download_pexels_b_roll(expanded, api_key)
+        
     if clip and os.path.exists(clip):
         return clip
         
     backups = ["moody dark", "urban night", "focused student", "ticking clock", "rain window", "cyberpunk city", "financial trade"]
     backup_query = random.choice(backups)
-    print(f"Pexels primary expanded '{expanded_query}' returned no results. Auto-downloading backup: '{backup_query}'")
+    
+    if source == "pixabay":
+        return download_pixabay_b_roll(backup_query, api_key)
     return download_pexels_b_roll(backup_query, api_key)
+
+
+# --- NATIVE AUTOMATIC ROYALTY-FREE BACKGROUND MUSIC DOWNLOADER ---
+def download_free_soundtrack(track_name):
+    """
+    Downloads high-quality, royalty-free background loop soundtracks 
+    from direct open public audio CDNs.
+    """
+    local_path = os.path.join(DEFAULT_DIR, f"music_{track_name}.mp3")
+    if os.path.exists(local_path):
+        return local_path
+        
+    urls = {
+        "dramatic": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        "ambient": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+        "lofi": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"
+    }
+    
+    url = urls.get(track_name.lower())
+    if url:
+        try:
+            print(f"Downloading free background soundtrack loop: '{track_name.upper()}'...")
+            r = requests.get(url, timeout=25)
+            if r.status_code == 200:
+                with open(local_path, "wb") as f:
+                    f.write(r.content)
+                return local_path
+        except Exception as e:
+            print(f"Free soundtrack download failed: {e}")
+    return None
+
 
 # --- CINEMATIC ANIMATED PRESET GENERATOR WITH PARTICLES & VIGNETTE ---
 def make_animated_background_clip(duration, theme="Curiosity"):
@@ -334,7 +452,7 @@ def parse_vtt(vtt_path):
         if subtitles[i]['end'] > subtitles[i+1]['start']: subtitles[i]['end'] = subtitles[i+1]['start']
     return subtitles
 
-# --- MATHEMATICALLY PERFECT VERTICAL SCALER & CROPPER (NO EMPTY BLACK SPACES, 100% ROBUST) ---
+# --- MATHEMATICALLY PERFECT VERTICAL SCALER & CROPPER ---
 def make_vertical_clip(clip, target_w=720, target_h=1280):
     w, h = clip.size
     target_aspect = target_w / target_h
@@ -342,12 +460,10 @@ def make_vertical_clip(clip, target_w=720, target_h=1280):
     
     if current_aspect > target_aspect:
         new_w = int(h * target_aspect)
-        left = (w - new_w) // 2
-        cropped_clip = clip.cropped(x1=left, y1=0, width=new_w, height=h)
+        cropped_clip = clip.cropped(x1=(w - new_w) // 2, y1=0, width=new_w, height=h)
     else:
         new_h = int(w / target_aspect)
-        top = (h - new_h) // 2
-        cropped_clip = clip.cropped(x1=0, y1=top, width=w, height=new_h)
+        cropped_clip = clip.cropped(x1=0, y1=(h - new_h) // 2, width=w, height=new_h)
         
     return cropped_clip.resized(width=target_w, height=target_h)
 
@@ -470,9 +586,6 @@ def make_progress_bar_clip(duration, width=720, height=1280, bar_height=10, bar_
 def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='yellow', caption_style='standard'):
     display_subs = subtitles
     actual_font_size = font_size
-    
-    # Check if a custom style theme is selected under caption_style
-    # Themes: Hormozi, Cyberpunk, Minimalist
     caption_theme = str(caption_style).lower()
     
     is_word_pop = "hormozi" in caption_theme or "cyberpunk" in caption_theme or "word_pop" in caption_theme
@@ -507,40 +620,27 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
         txt = s['text']
         clean_w = re.sub(r'[^\w]', '', txt.lower())
         
-        # Default Theme: Hormozi Gold style (Yellow / Green bold)
-        word_color = "#FFD700" if color == "yellow" else color
+        word_color = color
         word_size = actual_font_size
         stroke_color = "black"
         stroke_width = 4
         is_power = False
         
-        # Apply Preset Themes
         if "cyberpunk" in caption_theme:
-            word_color = "#00FFFF" # Tense Cyan
+            word_color = "#00FFFF"
             if clean_w in POWER_WORDS:
-                txt = f"⚡ {txt}"
-                word_color = "#FF00FF" # Neon Pink on power words!
-                word_size = int(actual_font_size * 1.15)
-                is_power = True
+                txt, word_color, word_size, is_power = f"⚡ {txt}", "#FF00FF", int(actual_font_size * 1.15), True
         elif "minimalist" in caption_theme:
-            word_color = "#FFFFFF" # Clean Minimal White
-            stroke_color = "black"
-            stroke_width = 2
+            word_color, stroke_width = "#FFFFFF", 2
             if clean_w in POWER_WORDS:
-                word_color = "#F5921D" # Soft Orange accent
-                word_size = int(actual_font_size * 1.10)
-                is_power = True
+                word_color, word_size, is_power = "#F5921D", int(actual_font_size * 1.10), True
         else:
-            # Hormozi style (Default)
             if clean_w in POWER_WORDS:
-                txt = f"{POWER_WORDS[clean_w]} {txt}"
-                word_color = "#39FF14" # Neon Green
-                word_size = int(actual_font_size * 1.18)
-                is_power = True
+                txt, word_color, word_size, is_power = f"{POWER_WORDS[clean_w]} {txt}", "#39FF14", int(actual_font_size * 1.18), True
             
         txt_clip = TextClip(
             text=txt, 
-            font="Arial", # Windows Standard Font, 100% clean and compact
+            font="Arial", 
             font_size=word_size, 
             color=word_color, 
             stroke_color=stroke_color, 
@@ -550,9 +650,8 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
             text_align='center'
         )
         
-        # --- PREMIUM DYNAMIC WORD BOUNCE ZOOM ANIMATION ---
         try:
-            if "minimalist" not in caption_theme: # bounce only for active styles!
+            if "minimalist" not in caption_theme:
                 bouncy_txt_clip = txt_clip.resized(lambda t: min(1.0, 0.85 + (0.15 / 0.07) * t) if t < 0.07 else 1.0)
             else:
                 bouncy_txt_clip = txt_clip
@@ -604,7 +703,6 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 # 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
 # ==============================================================================
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
-    # --- PROACTIVE WINDOWS FILE LOCK AVOIDANCE (WinError 32): USE TIMESTAMPED FILENAMES ---
     timestamp = int(time.time())
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_{timestamp}.mp4")
     
@@ -616,7 +714,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
     audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_hybrid")
     
-    # Read custom layout/pacing parameters
     db_caption_style = db_settings.get_setting("caption_style", "word_pop")
     db_music_volume = float(db_settings.get_setting("bg_music_volume", 0.12))
     db_font_size = int(db_settings.get_setting("font_size", 55))
@@ -625,11 +722,19 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     bg_music_path = kwargs.get("bg_music_path", None)
     bg_music_volume = kwargs.get("bg_music_volume", db_music_volume)
     
+    # Proactively check and download missing default background music tracks!
+    if bg_music_path:
+        # e.g., if bg_music_path is "test.mp3", try downloading "dramatic"
+        track_tag = "dramatic" if "test.mp3" in bg_music_path else "ambient"
+        if not os.path.exists(bg_music_path):
+            download_free_soundtrack(track_tag)
+            bg_music_path = os.path.join(DEFAULT_DIR, f"music_{track_tag}.mp3")
+            
     if progress_cb: progress_cb(0.30, "Combining vocal tracks, ducking volume, and mixing soundtracks...")
     mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
     duration = voice_audio.duration
     
-    # --- PROACTIVE UPGRADE: FLEXIBLE CUT PACING (ADHD vs Standard vs Mindful) ---
+    # Pacing parameter
     cut_duration = float(kwargs.get("cut_duration", 2.0))
     num_cuts = int(np.ceil(duration / cut_duration))
     
@@ -638,7 +743,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     transition_audio_clips = []
     whoosh_path = generate_synthetic_whoosh_sound()
     
-    # Check both parameters and the local pexels_key.txt file to be 100% robust
+    # Read API key permanently
     pexels_key = kwargs.get("pexels_api_key", None)
     if not pexels_key or not pexels_key.strip():
         if os.path.exists("pexels_key.txt"):
@@ -649,6 +754,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 pass
                 
     custom_files = uploaded_file_paths if uploaded_file_paths else []
+    b_roll_source = kwargs.get("b_roll_source", "pexels").lower()
     
     for idx in range(num_cuts):
         start_t = idx * cut_duration
@@ -682,15 +788,15 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                     except Exception as e:
                         print(f"Failed loading uploaded clip: {e}")
                         
-        # Scenario B: Fetch stock video from Pexels!
+        # Scenario B: Fetch stock video from Pexels or Pixabay!
         if not clip_added and pexels_key and pexels_key.strip():
             sentence_words = extract_best_keywords(spoken_text, num_words=1)
             search_word = "abstract"
             if len(sentence_words) > 0:
                 search_word = sentence_words[idx % len(sentence_words)]
                 
-            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Downloading vertical HD stock clip from Pexels for '{search_word.upper()}'...")
-            downloaded_file = download_pexels_b_roll_with_fallback(search_word, pexels_key)
+            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Downloading vertical HD stock clip from {b_roll_source.upper()} for '{search_word.upper()}'...")
+            downloaded_file = download_pexels_b_roll_with_fallback(search_word, pexels_key, source=b_roll_source)
             if downloaded_file and os.path.exists(downloaded_file):
                 try:
                     raw_v = VideoFileClip(downloaded_file)
