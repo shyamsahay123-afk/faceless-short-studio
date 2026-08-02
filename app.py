@@ -4,6 +4,7 @@ import random
 import traceback
 import xml.etree.ElementTree as ET
 import requests
+import numpy as np
 import streamlit as st
 from PIL import Image
 import db_manager as db
@@ -103,13 +104,13 @@ def save_key_to_file(filename, key):
     except:
         pass
 
-# --- FAST CACHED API CONNECTION STATUS TESTERS ---
+# --- FAST CACHED API CONNECTION STATUS TESTERS (UPGRADED WITH TIMEOUTS & CODES) ---
 @st.cache_data(ttl=60)
 def test_pexels_key_connection(api_key):
     if not api_key or not api_key.strip():
         return "empty"
     try:
-        r = requests.get("https://api.pexels.com/v1/collections", headers={"Authorization": api_key}, timeout=4)
+        r = requests.get("https://api.pexels.com/v1/collections", headers={"Authorization": api_key}, timeout=10)
         if r.status_code == 200:
             return "valid"
         return "invalid"
@@ -120,9 +121,10 @@ def test_pexels_key_connection(api_key):
 def test_pixabay_key_connection(api_key):
     if not api_key or not api_key.strip():
         return "empty"
-    url = f"https://pixabay.com/api/?key={api_key}&q=nature&per_page=1"
+    # Query Pixabay Video API with valid per_page (must be >= 3!)
+    url = f"https://pixabay.com/api/videos/?key={api_key}&q=nature&per_page=3"
     try:
-        r = requests.get(url, timeout=4)
+        r = requests.get(url, timeout=10)
         if r.status_code == 200:
             return "valid"
         return "invalid"
@@ -133,10 +135,12 @@ def test_pixabay_key_connection(api_key):
 def test_elevenlabs_key_connection(api_key):
     if not api_key or not api_key.strip():
         return "empty"
-    url = "https://api.elevenlabs.io/v1/voices"
+    # Call ElevenLabs text-to-speech with a light post test. 
+    # If the key is valid, it returns 200 or 402 (paid plan required for custom voice, but key is authenticated!)
+    url = "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM"
     try:
-        r = requests.get(url, headers={"xi-api-key": api_key}, timeout=4)
-        if r.status_code == 200:
+        r = requests.post(url, headers={"xi-api-key": api_key}, json={"text": "."}, timeout=10)
+        if r.status_code in (200, 402):
             return "valid"
         return "invalid"
     except:
@@ -187,26 +191,36 @@ def auto_generate_script_local(topic, style_choice):
             "If you want to master deep passionate chemistry with your partner, stop doing this Mistake.",
             "Studies reveal the raw truth why unshakeable physical intimacy has nothing to do with looks."
         ]
+        value_delivery = """[VALUE DELIVERY]
+Here is the raw relationship shift:
+1. The Core Shift: Shift from passive attraction to deep presence.
+2. The Intimacy Loop: Lock in undivided, focused attention for 30 minutes every single night.
+3. Emotional Safety: Create a space of absolute trust first. Raw chemistry isn't about physical traits—it's about feeling safe to connect."""
+        cta = "Save this video so you don't lose it + Follow for daily elite frameworks ❤️"
+        
     elif "Dramatic" in style_choice:
         hook_category = "Curiosity Gap"
         trigger_desc = "Create an open loop in the first 2 seconds that makes the brain demand closure."
         hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["99% of people get this entirely wrong. Here is the exact truth about [Topic]."])
+        value_delivery = random.choice(psych.VALUE_DELIVERY_TEMPLATES)
+        cta = "Save this video so you don't lose it + Follow for daily elite frameworks 📈"
     elif "Motivational" in style_choice:
         hook_category = "Identity Signaling"
         trigger_desc = "Make the viewer feel they belong to a higher-status group (smart, disciplined, successful)."
         hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["Only the top 1% of highly disciplined minds actually do this."])
+        value_delivery = random.choice(psych.VALUE_DELIVERY_TEMPLATES)
+        cta = "Drop a 🔥 in the comments if you are executing this today!"
     else:
         hook_category = "Loss Aversion"
         trigger_desc = "Highlight what the viewer will lose if they don’t act."
         hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["Stop wasting your precious time on this mistake before it destroys your goal."])
+        value_delivery = random.choice(psych.VALUE_DELIVERY_TEMPLATES)
+        cta = "Save this video so you don't lose it + Follow for daily elite frameworks 📈"
         
     selected_hook = random.choice(hooks)
     custom_hook = selected_hook.replace("[Topic]", topic).replace("[Niche]", topic).replace("[Role/Niche]", "performer").replace("[Role/Goal]", "leader").replace("[Bad Habit/Mistake]", "wasting focus").replace("[Money/Time/Health]", "focus")
     
-    val_delivery = random.choice(psych.VALUE_DELIVERY_TEMPLATES)
-    cta = random.choice(psych.ENGAGEMENT_CTA_TEMPLATES)
-    
-    full_script = f"""[0-3 sec HOOK]\n{custom_hook}\n\n[PSYCHOLOGY TRIGGER: {hook_category}]\n{trigger_desc}\n\n{val_delivery}\n\n[ENGAGEMENT CTA]\n{cta}"""
+    full_script = f"""[0-3 sec HOOK]\n{custom_hook}\n\n[PSYCHOLOGY TRIGGER: {hook_category}]\n{trigger_desc}\n\n{value_delivery}\n\n[ENGAGEMENT CTA]\n{cta}"""
     title = f"{custom_hook[:45]}..." if len(custom_hook) > 45 else custom_hook
     tags = f"{topic.lower().replace(' ', '')}, shorts, viral, psychology, {hook_category.lower().replace(' ', '')}"
     
@@ -217,7 +231,7 @@ def auto_generate_script_local(topic, style_choice):
 # ==============================================================================
 db.init_db()
 
-# --- CLEAN API KEY UTILITY (Strips trailing comments like ' - pixa' or ' - 11labs'!) ---
+# --- CLEAN API KEY UTILITY ---
 def clean_api_key(key):
     if not key:
         return ""
@@ -334,11 +348,34 @@ if 'active_script' in st.session_state:
     spoken_clean = video.clean_script_for_speech(edited_script)
     keywords_list = video.extract_best_keywords(spoken_clean, num_words=12)
     
-    st.markdown("**🔍 Visual Stock B-Roll Search Prompts:**")
-    st.write(f"The AI will search and download beautiful vertical video loops for these terms: `{', '.join(keywords_list)}`")
-    
     st.session_state['active_title'] = edited_title
     st.session_state['active_script'] = edited_script
+
+    # Calculate estimated cuts needed
+    word_count = len(spoken_clean.split())
+    duration_est = word_count / 2.5
+    
+    pacing_dur = 2.0
+    num_cuts_est = int(np.ceil(duration_est / pacing_dur))
+    
+    # --- INTERACTIVE VISUAL STORYBOARD PROMPTER ("Make scenario directly") ---
+    st.markdown("### 🎬 Step 2.5: Interactive Visual Storyboard Director")
+    st.write("Direct what visual clip appears on screen for every 2-second block of your video! Overwrite the default keywords with custom prompts (e.g. *'couple hugging'*, *'fireplace'*) to direct your scenario:")
+    
+    col_sc1, col_sc2 = st.columns(2)
+    custom_scenarios = []
+    
+    for c_idx in range(min(12, num_cuts_est)):
+        default_term = keywords_list[c_idx % len(keywords_list)]
+        col_target = col_sc1 if c_idx % 2 == 0 else col_sc2
+        term_val = col_target.text_input(
+            f"📷 Scene #{c_idx+1} Prompt (Sec {c_idx*2}-{(c_idx+1)*2}):", 
+            value=default_term, 
+            key=f"scen_{c_idx}"
+        )
+        custom_scenarios.append(term_val)
+        
+    st.session_state['custom_scenarios'] = custom_scenarios
 
 st.divider()
 
@@ -414,6 +451,7 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
         preset_script = st.session_state['active_script']
         preset_tags = st.session_state.get('active_tags', 'shorts, viral')
         trigger_used = st.session_state.get('active_trigger', 'Identity Signaling')
+        scenarios_input = st.session_state.get('custom_scenarios', [])
         
         all_channels = db.get_all_channels()
         if not all_channels:
@@ -431,22 +469,23 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             preset_tags
         )
         
+        # --- COMPACT IN-PLACE TERMINAL RENDER LOG SYSTEM ---
         progress_container = st.container(border=True)
         with progress_container:
             st.markdown("### 🤖 Live AI Production Console")
             progress_bar = st.progress(0.0)
-            status_indicator = st.status("Initializing AI Compilation Engines...", expanded=True)
+            status_text = st.empty() # Overwrites text dynamically in-place!
         
         def render_progress(pct, text):
             progress_bar.progress(pct)
-            status_indicator.write(f"🔹 {text} ({int(pct*100)}%)")
+            status_text.markdown(f"🤖 **AI Active:** {text} ... **{int(pct*100)}%**")
             
         custom_filepaths = []
         if uploaded_files:
             custom_filepaths = [save_uploaded_file(f) for f in uploaded_files]
             
         try:
-            # Call our ultimate hybrid compiler!
+            # Call our ultimate hybrid compiler with custom scenarios!
             v_path, a_path, vtt_path = video.create_hybrid_ai_video(
                 short_id, 
                 preset_script, 
@@ -456,16 +495,16 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 bg_music_path=bg_music_path,
                 bg_music_volume=music_volume,
                 show_progress_bar=show_progress_bar,
-                pexels_api_key=active_video_key,
-                elevenlabs_api_key=elevenlabs_api_key,
+                pexels_api_key=pexels_api_key,
                 progress_callback=render_progress,
                 caption_style=caption_style_code,
                 cut_duration=cut_duration_val,
-                b_roll_source=b_roll_source_val
+                b_roll_source=b_roll_source_val,
+                custom_scenarios=scenarios_input
             )
             
             db.update_short_video(short_id, v_path, a_path, vtt_path, status='created')
-            status_indicator.update(label="✅ Video Generated Successfully!", state="complete", expanded=False)
+            status_text.markdown("🤖 **AI Active:** Render complete! ... **100%**")
             
             st.success("🎉 Your AI video has been compiled flawlessly!"); st.balloons()
             
@@ -481,7 +520,7 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 st.text_input("🏷️ Tags & Keywords:", value=seo_data["tags"])
                 
         except Exception as e:
-            status_indicator.update(label="❌ Render Failed!", state="error", expanded=True)
+            status_text.error("❌ Render Failed!")
             st.error(f"⚠️ Render failure: {e}")
             with st.expander("🛠️ Debug Terminal & Crash Log Stack Trace"):
                 st.code(traceback.format_exc())

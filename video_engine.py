@@ -360,7 +360,6 @@ def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
     
-    # Use "Antoni" (ErXwobaYiN019PkySvjV) - which is 100% Free Tier authorized, smooth and deep male voice!
     voice_id = "ErXwobaYiN019PkySvjV" 
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
@@ -412,7 +411,7 @@ def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
         print(f"ElevenLabs TTS failed: {e}. Falling back.")
     return None, None
 
-# --- NATIVE PYTHON TTS GENERATOR (100% ROBUST, NO PATH ISSUES, NO SUBPROCESS, THREAD-SAFE EVENT LOOP) ---
+# --- NATIVE PYTHON TTS GENERATOR ---
 def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice", eleven_key=None):
     if eleven_key and eleven_key.strip():
         print("Calling premium ElevenLabs voiceover...")
@@ -449,7 +448,7 @@ def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basena
             print(f"gTTS fallback failed: {ge}")
             return None, None
 
-# --- WEB VTT / SRT PARSER (FULLY HYBRID) ---
+# --- WEB VTT / SRT PARSER ---
 def parse_vtt(vtt_path):
     if not vtt_path or not os.path.exists(vtt_path): return []
     with open(vtt_path, 'r', encoding='utf-8') as f:
@@ -770,6 +769,9 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     custom_files = uploaded_file_paths if uploaded_file_paths else []
     b_roll_source = kwargs.get("b_roll_source", "pexels").lower()
     
+    # Read custom storyboard scenarios list if passed!
+    custom_scenarios = kwargs.get("custom_scenarios", [])
+    
     # --- FIXED CACHE LOOP: Extract different keywords for EVERY cut index! ---
     sentence_words = extract_best_keywords(spoken_text, num_words=num_cuts)
     
@@ -807,10 +809,13 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                         
         # Scenario B: Fetch stock video from Pexels or Pixabay!
         if not clip_added and pexels_key and pexels_key.strip():
-            search_word = "abstract"
-            if len(sentence_words) > 0:
-                # Rotates perfectly through different words in the list!
-                search_word = sentence_words[idx % len(sentence_words)]
+            # --- PROACTIVE OPTIMIZATION: USE USER'S CUSTOM DIRECT SCENARIOS OVERRIDE ---
+            if idx < len(custom_scenarios) and custom_scenarios[idx].strip():
+                search_word = custom_scenarios[idx].strip()
+            else:
+                search_word = "abstract"
+                if len(sentence_words) > 0:
+                    search_word = sentence_words[idx % len(sentence_words)]
                 
             if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Downloading vertical HD stock clip from {b_roll_source.upper()} for '{search_word.upper()}'...")
             downloaded_file = download_pexels_b_roll_with_fallback(search_word, pexels_key, source=b_roll_source)
