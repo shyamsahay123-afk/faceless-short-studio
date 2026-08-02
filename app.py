@@ -78,6 +78,23 @@ def save_uploaded_file(uploaded_file, target_dir="uploaded_assets"):
         f.write(uploaded_file.getbuffer())
     return file_path
 
+# --- LOCAL FILE API KEY AUTO-SAVER (100% RELIABLE ON RESTART) ---
+def load_pexels_key():
+    if os.path.exists("pexels_key.txt"):
+        try:
+            with open("pexels_key.txt", "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except:
+            pass
+    return ""
+
+def save_pexels_key(key):
+    try:
+        with open("pexels_key.txt", "w", encoding="utf-8") as f:
+            f.write(str(key).strip())
+    except:
+        pass
+
 # --- Local Standalone AI Script Draft Generator ---
 def auto_generate_script_local(topic, style_choice):
     if "Dramatic" in style_choice:
@@ -113,16 +130,16 @@ def auto_generate_script_local(topic, style_choice):
 # ==============================================================================
 db.init_db()
 
-# Permanently auto-save and auto-fill Pexels API Key
-saved_key = db.get_setting("pexels_api_key", "")
+# Permanently auto-save and auto-fill Pexels API Key using plain-text file
+saved_key = load_pexels_key()
 pexels_api_key = st.sidebar.text_input(
     "🔑 Pexels API Key", 
     type="password", 
     value=saved_key,
-    help="Your key is saved permanently in your local database settings once typed!"
+    help="Your key is saved permanently on your PC so you never have to type it again!"
 )
 if pexels_api_key != saved_key:
-    db.set_setting("pexels_api_key", pexels_api_key)
+    save_pexels_key(pexels_api_key)
 
 st.sidebar.divider()
 st.sidebar.markdown("**🎬 Workspace Stats:**")

@@ -603,6 +603,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         extra_clips.append(prog_clip)
         
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
+    # --- FIXED FOR BOTH DECORATOR BINDINGS & COMPATIBILITY: PASS PIX_FMT VIA FFMPEG_PARAMS LIST! ---
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
         output_video_path, 
         fps=24, 
@@ -610,7 +611,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         audio_codec="aac", 
         preset="fast", 
         logger=None,
-        pix_fmt="yuv420p" # Forces standard universal color decoding space!
+        ffmpeg_params=["-pix_fmt", "yuv420p"] # Bypasses Python signature checking, works universally!
     )
     
     if progress_cb: progress_cb(0.98, "Releasing local system file locks and saving database state...")
