@@ -568,7 +568,9 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             update_short_video(short_id, v_path, a_path, vtt_path)
             status_indicator.update(label="✅ Video Generated Successfully!", state="complete", expanded=False)
             st.success("🎉 Your AI video has been compiled flawlessly!"); st.balloons()
-            st.video(v_path)
+            col_p1, col_p2, col_p3 = st.columns([1.2, 1.6, 1.2])
+            with col_p2:
+                st.video(v_path)
             
             with st.expander("📋 Click to Copy: Algorithmic SEO Copy Pack"):
                 niche_clean = "SelfImprovement"

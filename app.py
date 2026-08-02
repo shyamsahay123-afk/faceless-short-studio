@@ -289,8 +289,10 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             
             st.success("🎉 Your AI video has been compiled flawlessly!"); st.balloons()
             
-            # Display final video player
-            st.video(v_path)
+            # Display final video player centered and scaled nicely (like a smartphone!)
+            col_p1, col_p2, col_p3 = st.columns([1.2, 1.6, 1.2])
+            with col_p2:
+                st.video(v_path)
             
             # Simple metadata pack dropdown
             with st.expander("📋 Click to Copy: Algorithmic SEO Copy Pack"):
