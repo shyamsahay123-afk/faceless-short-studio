@@ -83,6 +83,20 @@ def download_pexels_b_roll(query, api_key):
         print(f"Pexels search failed for '{query}': {e}")
     return None
 
+# --- PEXELS AUTOMATED BACKUP KEYWORD DOWNLOADER (PREVENTS BLANK BACKGROUNDS) ---
+def download_pexels_b_roll_with_fallback(query, api_key):
+    # Try primary query
+    clip = download_pexels_b_roll(query, api_key)
+    if clip and os.path.exists(clip):
+        return clip
+        
+    # Fallback to highly aesthetic generic stock searches
+    backups = ["moody dark", "urban night", "focused student", "ticking clock", "rain window", "cyberpunk city", "financial trade"]
+    import random
+    backup_query = random.choice(backups)
+    print(f"Pexels primary '{query}' returned no results. Auto-downloading backup: '{backup_query}'")
+    return download_pexels_b_roll(backup_query, api_key)
+
 # --- CINEMATIC ANIMATED PRESET GENERATOR WITH PARTICLES & VIGNETTE ---
 def make_animated_background_clip(duration, theme="Curiosity"):
     width, height = 720, 1280
@@ -371,14 +385,14 @@ def make_progress_bar_clip(duration, width=720, height=1280, bar_height=10, bar_
         return np.array(img)
     return VideoClip(make_frame, duration=duration)
 
-# --- UPGRADED CAPTIONS GENERATOR (WITH AD-HD POWER WORDS + SFX TRIGGERS) ---
+# --- UPGRADED CAPTIONS GENERATOR (WITH DYNAMIC JUMP-BOUNCE ANIMATION & COMPACT WINDOWS FONTS) ---
 def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='yellow', caption_style='standard'):
     display_subs = subtitles
     actual_font_size = font_size
     
     if caption_style == 'word_pop':
         display_subs = split_subtitles_into_words(subtitles, words_per_clip=1)
-        actual_font_size = int(font_size * 1.35)
+        actual_font_size = int(font_size * 0.95) # Scaled down to fit perfectly inside 9:16 layout without distortion!
         
     text_clips = []
     sfx_clips = []
@@ -413,24 +427,33 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
         if caption_style == 'word_pop' and clean_w in POWER_WORDS:
             txt = f"{POWER_WORDS[clean_w]} {txt}"
             word_color = "#39FF14"
-            word_size = int(actual_font_size * 1.25)
+            word_size = int(actual_font_size * 1.15) # slightly larger, but safe!
             is_power = True
             
+        # FORCE WINDOWS STANDARD COMPACT "ARIAL" FONT TO FIX THE DISTORTED SHAPES BUG!
         txt_clip = TextClip(
             text=txt, 
+            font="Arial", # Windows Standard Font, 100% clean and compact
             font_size=word_size, 
             color=word_color, 
             stroke_color='black', 
             stroke_width=4, 
             method='caption', 
-            size=(target_w - 80, None), 
+            size=(target_w - 120, None), # Wrap nicely inside safety margins
             text_align='center'
         )
         
+        # --- PREMIUM JUMPING BOUNCE ANIMATION EFFECT ON EVERY WORD-POP ---
+        try:
+            # Word starts at 85% scale and zooms to 100% in the first 0.07 seconds
+            bouncy_txt_clip = txt_clip.resized(lambda t: min(1.0, 0.85 + (0.15 / 0.07) * t) if t < 0.07 else 1.0)
+        except:
+            bouncy_txt_clip = txt_clip # Safe fallback if lambda scale is not supported
+            
         text_clips.append(
-            txt_clip.with_duration(duration)
-                    .with_start(s['start'])
-                    .with_position(('center', 0.55))
+            bouncy_txt_clip.with_duration(duration)
+                           .with_start(s['start'])
+                           .with_position(('center', 0.55))
         )
         
         if is_power:
@@ -475,7 +498,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_compiled.mp4")
     progress_cb = kwargs.get("progress_callback", None)
     
-    if progress_cb: progress_cb(0.05, "Cleaning script...")
+    if progress_cb: progress_cb(0.05, "Cleaning production script for text-to-speech engine...")
     spoken_text = clean_script_for_speech(script_text)
     
     if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
@@ -553,7 +576,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 search_word = sentence_words[idx % len(sentence_words)]
                 
             if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Downloading vertical HD stock clip from Pexels for '{search_word.upper()}'...")
-            downloaded_file = download_pexels_b_roll(search_word, pexels_key)
+            downloaded_file = download_pexels_b_roll_with_fallback(search_word, pexels_key)
             if downloaded_file and os.path.exists(downloaded_file):
                 try:
                     raw_v = VideoFileClip(downloaded_file)
