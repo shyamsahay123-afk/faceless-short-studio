@@ -701,4 +701,4 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         pass
         
     if progress_cb: progress_cb(1.00, "Render complete!")
-    return output_video_path, audio_path, srt_path
+    return output_video_path, audio_path, vtt_path
