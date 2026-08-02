@@ -6,6 +6,7 @@ import subprocess
 import numpy as np
 import requests
 import time
+import random
 import edge_tts
 import db_manager as db_settings
 from moviepy import (
@@ -17,20 +18,16 @@ from PIL import Image, ImageDraw
 # --- PROACTIVE WINDOWS & PYTHON 3.14 COMPATIBILITY PATCHES ---
 # ==============================================================================
 
-# On Python 3.14 on Windows, subprocess handles are aggressively collected on exit, 
-# which causes MoviePy's FFMPEG_AudioReader.__del__ to print a messy 'WinError 6: The handle is invalid' 
-# ignored exception. We proactively patch subprocess.Popen.poll to silence invalid handle errors!
 original_poll = subprocess.Popen.poll
 def safe_poll(self):
     try:
         return original_poll(self)
     except OSError as e:
         if getattr(e, 'winerror', None) == 6 or "handle is invalid" in str(e).lower():
-            return 0 # Return success code if handle is already dead
+            return 0
         raise
 subprocess.Popen.poll = safe_poll
 
-# Run async functions in a completely separate OS thread to prevent any Event Loop conflicts with Streamlit
 def run_async_in_thread(coro):
     result = []
     exception = []
@@ -64,7 +61,7 @@ os.makedirs(DEFAULT_DIR, exist_ok=True)
 os.makedirs(B_ROLL_DIR, exist_ok=True)
 
 # --- KEYWORD EXTRACTOR FOR AUTOMATED B-ROLL SEARCH ---
-def extract_best_keywords(text, num_words=2):
+def extract_best_keywords(text, num_words=6):
     stop_words = {
         'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'in', 'on', 'at', 'with', 'by', 'to', 'for', 'and', 'but', 
         'or', 'if', 'then', 'else', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 
@@ -84,14 +81,10 @@ def extract_best_keywords(text, num_words=2):
                 break
     return result if result else ["abstract"]
 
-# --- PEXELS DYNAMIC VIDEO DOWNLOADER ---
+# --- PEXELS DYNAMIC VIDEO DOWNLOADER (UPGRADED WITH RANDOM PICKER & UNIQUE ID CACHING) ---
 def download_pexels_b_roll(query, api_key):
     clean_query = str(query).replace(" ", "+")
-    local_path = os.path.join(B_ROLL_DIR, f"{clean_query.lower()}_916.mp4")
     
-    if os.path.exists(local_path):
-        return local_path
-        
     headers = {"Authorization": api_key}
     url = f"https://api.pexels.com/videos/search?query={clean_query}&per_page=15&orientation=portrait"
     
@@ -101,7 +94,17 @@ def download_pexels_b_roll(query, api_key):
             data = r.json()
             videos = data.get("videos", [])
             if videos:
-                video_files = videos[0].get("video_files", [])
+                # --- PROACTIVE OPTIMIZATION: PICK A RANDOM VIDEO FROM TOP 6 RESULTS TO STOP REPETITION ---
+                # This ensures we get dynamic, diverse visual variety on every single render run!
+                selected_v = random.choice(videos[:min(len(videos), 6)])
+                video_id = selected_v.get("id")
+                
+                # Cache using both the query name AND the unique video ID so they never overwrite each other!
+                local_path = os.path.join(B_ROLL_DIR, f"{clean_query.lower()}_{video_id}_916.mp4")
+                if os.path.exists(local_path):
+                    return local_path
+                    
+                video_files = selected_v.get("video_files", [])
                 target_link = None
                 
                 for vf in video_files:
@@ -132,7 +135,6 @@ def download_pexels_b_roll_with_fallback(query, api_key):
         return clip
         
     backups = ["moody dark", "urban night", "focused student", "ticking clock", "rain window", "cyberpunk city", "financial trade"]
-    import random
     backup_query = random.choice(backups)
     print(f"Pexels primary '{query}' returned no results. Auto-downloading backup: '{backup_query}'")
     return download_pexels_b_roll(backup_query, api_key)
@@ -184,9 +186,7 @@ def make_animated_background_clip(duration, theme="Curiosity"):
             x = int(p['x_pct'] * width)
             y = int(((p['y_start_pct'] - p['speed'] * t) % 1.0) * height)
             rad = p['size']
-            # Core
             draw.ellipse([x - rad, y - rad, x + rad, y + rad], fill=(orb_color[0], orb_color[1], orb_color[2], p['opacity']))
-            # Soft Glow
             if rad > 3:
                 draw.ellipse([x - rad - 2, y - rad - 2, x + rad + 2, y + rad + 2], fill=(orb_color[0], orb_color[1], orb_color[2], int(p['opacity'] * 0.4)))
         
@@ -540,7 +540,7 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 
 
 # ==============================================================================
-# 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
+# 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE (WITH EXPLICIT YUV420P PIX FMT) 🧬
 # ==============================================================================
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
     # --- PROACTIVE WINDOWS FILE LOCK AVOIDANCE (WinError 32): USE TIMESTAMPED FILENAMES ---
