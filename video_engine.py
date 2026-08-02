@@ -201,6 +201,9 @@ def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basena
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
     
+    import asyncio
+    import edge_tts
+    
     async def amain():
         communicate = edge_tts.Communicate(text, voice_name)
         submaker = edge_tts.SubMaker()
@@ -464,7 +467,7 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 
 
 # ==============================================================================
-# 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
+# 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE (WITH EXPLICIT YUV420P PIX FMT) 🧬
 # ==============================================================================
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_compiled.mp4")
@@ -589,7 +592,16 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         extra_clips.append(prog_clip)
         
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
-    CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast", logger=None)
+    # --- CRITICAL FIX FOR WINDOWS: FORCE YUV420P PIX FMT TO PREVENT BLANK BLACK VIDEO IN PLAYERS ---
+    CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
+        output_video_path, 
+        fps=24, 
+        codec="libx264", 
+        audio_codec="aac", 
+        preset="fast", 
+        logger=None,
+        pix_fmt="yuv420p" # Forces standard universal color decoding space!
+    )
     
     if progress_cb: progress_cb(0.98, "Releasing local system file locks and saving database state...")
     try: 
