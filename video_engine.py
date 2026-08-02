@@ -85,12 +85,10 @@ def download_pexels_b_roll(query, api_key):
 
 # --- PEXELS AUTOMATED BACKUP KEYWORD DOWNLOADER (PREVENTS BLANK BACKGROUNDS) ---
 def download_pexels_b_roll_with_fallback(query, api_key):
-    # Try primary query
     clip = download_pexels_b_roll(query, api_key)
     if clip and os.path.exists(clip):
         return clip
         
-    # Fallback to highly aesthetic generic stock searches
     backups = ["moody dark", "urban night", "focused student", "ticking clock", "rain window", "cyberpunk city", "financial trade"]
     import random
     backup_query = random.choice(backups)
@@ -144,9 +142,7 @@ def make_animated_background_clip(duration, theme="Curiosity"):
             x = int(p['x_pct'] * width)
             y = int(((p['y_start_pct'] - p['speed'] * t) % 1.0) * height)
             rad = p['size']
-            # Core
             draw.ellipse([x - rad, y - rad, x + rad, y + rad], fill=(orb_color[0], orb_color[1], orb_color[2], p['opacity']))
-            # Soft Glow
             if rad > 3:
                 draw.ellipse([x - rad - 2, y - rad - 2, x + rad + 2, y + rad + 2], fill=(orb_color[0], orb_color[1], orb_color[2], int(p['opacity'] * 0.4)))
         
@@ -265,10 +261,26 @@ def parse_vtt(vtt_path):
         if subtitles[i]['end'] > subtitles[i+1]['start']: subtitles[i]['end'] = subtitles[i+1]['start']
     return subtitles
 
+# --- MATHEMATICALLY PERFECT VERTICAL SCALER & CROPPER (NO EMPTY BLACK SPACES, 100% ROBUST) ---
 def make_vertical_clip(clip, target_w=720, target_h=1280):
     w, h = clip.size
-    if (w / h) > (target_w / target_h): return clip.resized(height=target_h).cropped(x_center=int(clip.size[0] / 2), width=target_w)
-    else: return clip.resized(width=target_w).cropped(y_center=int(clip.size[1] / 2), height=target_h)
+    target_aspect = target_w / target_h
+    current_aspect = w / h
+    
+    # Calculate cropping boundaries on original dimensions first
+    if current_aspect > target_aspect:
+        # Source is wider (horizontal), crop left & right margins
+        new_w = int(h * target_aspect)
+        left = (w - new_w) // 2
+        cropped_clip = clip.cropped(x1=left, y1=0, width=new_w, height=h)
+    else:
+        # Source is taller, crop top & bottom margins
+        new_h = int(w / target_aspect)
+        top = (h - new_h) // 2
+        cropped_clip = clip.cropped(x1=0, y1=top, width=w, height=new_h)
+        
+    # Resize the perfectly cropped vertical clip directly to standard vertical size
+    return cropped_clip.resized(width=target_w, height=target_h)
 
 # --- DYNAMIC WORD-BY-WORD CHOPPER ---
 def split_subtitles_into_words(subtitles, words_per_clip=1):
@@ -392,7 +404,7 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
     
     if caption_style == 'word_pop':
         display_subs = split_subtitles_into_words(subtitles, words_per_clip=1)
-        actual_font_size = int(font_size * 0.95) # Scaled down to fit perfectly inside 9:16 layout without distortion!
+        actual_font_size = int(font_size * 0.95) # Compact fitting
         
     text_clips = []
     sfx_clips = []
@@ -427,28 +439,26 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
         if caption_style == 'word_pop' and clean_w in POWER_WORDS:
             txt = f"{POWER_WORDS[clean_w]} {txt}"
             word_color = "#39FF14"
-            word_size = int(actual_font_size * 1.15) # slightly larger, but safe!
+            word_size = int(actual_font_size * 1.15)
             is_power = True
             
-        # FORCE WINDOWS STANDARD COMPACT "ARIAL" FONT TO FIX THE DISTORTED SHAPES BUG!
         txt_clip = TextClip(
             text=txt, 
-            font="Arial", # Windows Standard Font, 100% clean and compact
+            font="Arial", # Force Arial compact standard
             font_size=word_size, 
             color=word_color, 
             stroke_color='black', 
             stroke_width=4, 
             method='caption', 
-            size=(target_w - 120, None), # Wrap nicely inside safety margins
+            size=(target_w - 120, None), 
             text_align='center'
         )
         
-        # --- PREMIUM JUMPING BOUNCE ANIMATION EFFECT ON EVERY WORD-POP ---
+        # --- DYNAMIC WORD BOUNCE ZOOM ANIMATION ---
         try:
-            # Word starts at 85% scale and zooms to 100% in the first 0.07 seconds
             bouncy_txt_clip = txt_clip.resized(lambda t: min(1.0, 0.85 + (0.15 / 0.07) * t) if t < 0.07 else 1.0)
         except:
-            bouncy_txt_clip = txt_clip # Safe fallback if lambda scale is not supported
+            bouncy_txt_clip = txt_clip
             
         text_clips.append(
             bouncy_txt_clip.with_duration(duration)
@@ -492,13 +502,13 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 
 
 # ==============================================================================
-# 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE (WITH EXPLICIT YUV420P PIX FMT) 🧬
+# 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
 # ==============================================================================
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_compiled.mp4")
     progress_cb = kwargs.get("progress_callback", None)
     
-    if progress_cb: progress_cb(0.05, "Cleaning production script for text-to-speech engine...")
+    if progress_cb: progress_cb(0.05, "Cleaning script...")
     spoken_text = clean_script_for_speech(script_text)
     
     if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
@@ -524,7 +534,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     transition_audio_clips = []
     whoosh_path = generate_synthetic_whoosh_sound()
     
-    # Check both parameters and the local pexels_key.txt file to be 100% robust
     pexels_key = kwargs.get("pexels_api_key", None)
     if not pexels_key or not pexels_key.strip():
         if os.path.exists("pexels_key.txt"):
@@ -626,7 +635,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         extra_clips.append(prog_clip)
         
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
-    # --- FIXED FOR BOTH DECORATOR BINDINGS & COMPATIBILITY: PASS PIX_FMT VIA FFMPEG_PARAMS LIST! ---
+    # --- COMBINED ROBUST WINDOWS COLORSPACE & CODEC FIXED FORMAT ---
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
         output_video_path, 
         fps=24, 
@@ -634,7 +643,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         audio_codec="aac", 
         preset="fast", 
         logger=None,
-        ffmpeg_params=["-pix_fmt", "yuv420p"] # Bypasses Python signature checking, works universally!
+        ffmpeg_params=["-pix_fmt", "yuv420p"] # Bypasses signature errors, works universally!
     )
     
     if progress_cb: progress_cb(0.98, "Releasing local system file locks and saving database state...")
