@@ -1,15 +1,57 @@
 import os
 import re
 import asyncio
+import threading
 import subprocess
 import numpy as np
 import requests
+import time
 import edge_tts
 import db_manager as db_settings
 from moviepy import (
     VideoClip, ImageClip, VideoFileClip, AudioFileClip, CompositeVideoClip, TextClip, concatenate_videoclips, CompositeAudioClip, concatenate_audioclips
 )
 from PIL import Image, ImageDraw
+
+# ==============================================================================
+# --- PROACTIVE WINDOWS & PYTHON 3.14 COMPATIBILITY PATCHES ---
+# ==============================================================================
+
+# On Python 3.14 on Windows, subprocess handles are aggressively collected on exit, 
+# which causes MoviePy's FFMPEG_AudioReader.__del__ to print a messy 'WinError 6: The handle is invalid' 
+# ignored exception. We proactively patch subprocess.Popen.poll to silence invalid handle errors!
+original_poll = subprocess.Popen.poll
+def safe_poll(self):
+    try:
+        return original_poll(self)
+    except OSError as e:
+        if getattr(e, 'winerror', None) == 6 or "handle is invalid" in str(e).lower():
+            return 0 # Return success code if handle is already dead
+        raise
+subprocess.Popen.poll = safe_poll
+
+# Run async functions in a completely separate OS thread to prevent any Event Loop conflicts with Streamlit
+def run_async_in_thread(coro):
+    result = []
+    exception = []
+    def worker():
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            res = loop.run_until_complete(coro)
+            result.append(res)
+            loop.close()
+        except Exception as e:
+            exception.append(e)
+            
+    t = threading.Thread(target=worker)
+    t.start()
+    t.join()
+    if exception:
+        raise exception[0]
+    return result[0] if result else None
+
+# ==============================================================================
 
 AUDIO_DIR = "audio_clips"
 VIDEO_DIR = "video_output"
@@ -142,7 +184,9 @@ def make_animated_background_clip(duration, theme="Curiosity"):
             x = int(p['x_pct'] * width)
             y = int(((p['y_start_pct'] - p['speed'] * t) % 1.0) * height)
             rad = p['size']
+            # Core
             draw.ellipse([x - rad, y - rad, x + rad, y + rad], fill=(orb_color[0], orb_color[1], orb_color[2], p['opacity']))
+            # Soft Glow
             if rad > 3:
                 draw.ellipse([x - rad - 2, y - rad - 2, x + rad + 2, y + rad + 2], fill=(orb_color[0], orb_color[1], orb_color[2], int(p['opacity'] * 0.4)))
         
@@ -208,13 +252,10 @@ def clean_script_for_speech(script_text):
         cleaned.append(l)
     return re.sub(r'\[.*?\]', '', " ".join(cleaned)).strip()
 
-# --- NATIVE PYTHON TTS GENERATOR (100% ROBUST, NO PATH ISSUES, NO SUBPROCESS) ---
+# --- NATIVE PYTHON TTS GENERATOR (100% ROBUST, NO PATH ISSUES, NO SUBPROCESS, THREAD-SAFE EVENT LOOP) ---
 def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice"):
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
-    
-    import asyncio
-    import edge_tts
     
     async def amain():
         communicate = edge_tts.Communicate(text, voice_name)
@@ -230,11 +271,8 @@ def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basena
             f_sub.write(submaker.get_srt())
             
     try:
-        # Run async in independent thread event loop to prevent Streamlit async conflicts
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(amain())
-        loop.close()
+        # Run natively and thread-safely
+        run_async_in_thread(amain())
         return audio_path, srt_path
     except Exception as e:
         print(f"Native edge-tts failed: {e}. Falling back to gTTS.")
@@ -505,7 +543,10 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 # 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
 # ==============================================================================
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
-    output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_compiled.mp4")
+    # --- PROACTIVE WINDOWS FILE LOCK AVOIDANCE (WinError 32): USE TIMESTAMPED FILENAMES ---
+    timestamp = int(time.time())
+    output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_{timestamp}.mp4")
+    
     progress_cb = kwargs.get("progress_callback", None)
     
     if progress_cb: progress_cb(0.05, "Cleaning script...")
@@ -534,6 +575,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     transition_audio_clips = []
     whoosh_path = generate_synthetic_whoosh_sound()
     
+    # Check both parameters and the local pexels_key.txt file to be 100% robust
     pexels_key = kwargs.get("pexels_api_key", None)
     if not pexels_key or not pexels_key.strip():
         if os.path.exists("pexels_key.txt"):
@@ -659,4 +701,4 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         pass
         
     if progress_cb: progress_cb(1.00, "Render complete!")
-    return output_video_path, audio_path, vtt_path
+    return output_video_path, audio_path, srt_path

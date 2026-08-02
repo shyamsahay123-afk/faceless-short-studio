@@ -58,7 +58,6 @@ def init_db():
 def get_all_channels():
     conn = get_connection()
     c = conn.cursor()
-    # Fetch exactly 6 columns so unpacked tuples are always guaranteed to have 6 items
     channels = c.execute("SELECT id, channel_name, niche, subscribers, total_shorts, youtube_credentials FROM channels").fetchall()
     conn.close()
     return channels
@@ -108,7 +107,6 @@ def add_short(channel_id, title, script, trigger, description, tags, status='ide
 def get_all_shorts():
     conn = get_connection()
     c = conn.cursor()
-    # Fetch exactly 14 columns
     shorts = c.execute("""
         SELECT s.id, s.channel_id, s.title, s.script, s.trigger, s.description, s.tags, 
                s.video_path, s.audio_path, s.subtitles_path, s.youtube_url, s.status, ch.channel_name, ch.niche 
@@ -149,6 +147,17 @@ def get_short(short_id):
 def update_short_video(short_id, video_path, audio_path, subtitles_path, status='created'):
     conn = get_connection()
     c = conn.cursor()
+    
+    # Proactively clean up and delete previous rendering files to prevent cluttering disk space!
+    prev = c.execute("SELECT video_path, audio_path, subtitles_path FROM shorts WHERE id=?", (short_id,)).fetchone()
+    if prev:
+        for fpath in prev:
+            if fpath and fpath != video_path and os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                except:
+                    pass # Ignore locked system files, they will be freed on exit
+                    
     c.execute("""UPDATE shorts SET video_path=?, audio_path=?, subtitles_path=?, status=? WHERE id=?""", 
               (video_path, audio_path, subtitles_path, status, short_id))
     
