@@ -195,28 +195,34 @@ voice_mapping = {
 }
 voice_code = voice_mapping[ai_voice_label]
 
-music_label = col_s2.selectbox("🎵 Background Music", [
-    "Dramatic Beats", 
-    "Atmospheric Ambient", 
-    "None"
+pacing_label = col_s2.selectbox("⏱️ Video Pacing", [
+    "⚡ Adrenaline ADHD (1.3s cuts)",
+    "🎬 Cinematic (2.0s cuts)",
+    "🌌 Mindful Slower (3.2s cuts)"
 ])
 
-music_mapping = {
-    "Dramatic Beats": "test.mp3",
-    "Atmospheric Ambient": "backup.mp3",
-    "None": None
+pacing_mapping = {
+    "⚡ Adrenaline ADHD (1.3s cuts)": 1.3,
+    "🎬 Cinematic (2.0s cuts)": 2.0,
+    "🌌 Mindful Slower (3.2s cuts)": 3.2
 }
-bg_music_path = music_mapping[music_label]
+cut_duration_val = pacing_mapping[pacing_label]
 
-caption_color = col_s3.selectbox("🔤 Caption Color", [
-    "yellow", 
-    "white", 
-    "cyan", 
-    "green", 
-    "magenta"
+caption_theme_label = col_s3.selectbox("🔤 Caption Theme", [
+    "🔥 Hormozi Gold style",
+    "🌌 Cyberpunk Neon",
+    "⚪ Minimalist White"
 ])
 
-# Under-the-hood settings (saved in background)
+caption_mapping = {
+    "🔥 Hormozi Gold style": ("hormozi", "yellow"),
+    "🌌 Cyberpunk Neon": ("cyberpunk", "cyan"),
+    "⚪ Minimalist White": ("minimalist", "white")
+}
+caption_style_code, caption_color = caption_mapping[caption_theme_label]
+
+# Under-the-hood settings (automated in background based on Step 1 Vibe!)
+bg_music_path = "test.mp3" if ("Dramatic" in style_choice or "Urgency" in style_choice) else "backup.mp3"
 show_progress_bar = True
 music_volume = 0.12
 
@@ -280,7 +286,8 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 show_progress_bar=show_progress_bar,
                 pexels_api_key=pexels_api_key,
                 progress_callback=render_progress,
-                caption_style="word_pop"
+                caption_style=caption_style_code,
+                cut_duration=cut_duration_val
             )
             
             # Save success state

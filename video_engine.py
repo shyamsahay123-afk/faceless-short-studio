@@ -60,6 +60,42 @@ os.makedirs(VIDEO_DIR, exist_ok=True)
 os.makedirs(DEFAULT_DIR, exist_ok=True)
 os.makedirs(B_ROLL_DIR, exist_ok=True)
 
+# --- ADVANCED SEMANTIC CONCEPT EXPANDER (THE HUMAN EDITOR BRUTAL SECRET) ---
+# Translates dry text keywords into visually stunning, cinematic b-roll search prompts
+CONCEPT_EXPANSIONS = {
+    "percent": "luxury penthouse view night",
+    "disciplined": "workout training morning sweat",
+    "minds": "brain connection cyber glow",
+    "mind": "glowing human brain macro",
+    "neuro": "glowing digital synapses grid",
+    "focus": "macro focus eye iris",
+    "boundary": "dark locked gate neon light",
+    "harvard": "classic library old books bookshelf",
+    "studies": "cinematic retro clock ticking",
+    "show": "projector screen lens flare",
+    "lock": "cyber padlock key close up",
+    "screen": "code matrix lines green",
+    "brain": "neon brain holographic rotation",
+    "deep": "galaxy deep space cosmic nebulas",
+    "friction": "running shoes asphalt fast pace",
+    "immediately": "lightning storm striking clouds",
+    "automate": "industrial robotic arms assembly",
+    "morning": "morning sun rays through foggy forest",
+    "performers": "elite executive walking slow motion",
+    "waste": "hourglass sand spilling macro",
+    "scrolling": "smart phone screen scrolling glow close up",
+    "money": "luxury gold bars vault safe",
+    "cash": "counting dollar bills hands slow motion",
+    "secrets": "mysterious figure shadow smoke",
+    "truth": "hundred percent 100 badge neon",
+    "mistake": "crumpled paper trash basket",
+    "destroying": "fire flames burning close up"
+}
+
+def expand_keyword_to_concept(word):
+    word_clean = str(word).lower().strip()
+    return CONCEPT_EXPANSIONS.get(word_clean, f"aesthetic {word_clean}")
+
 # --- KEYWORD EXTRACTOR FOR AUTOMATED B-ROLL SEARCH ---
 def extract_best_keywords(text, num_words=6):
     stop_words = {
@@ -94,12 +130,9 @@ def download_pexels_b_roll(query, api_key):
             data = r.json()
             videos = data.get("videos", [])
             if videos:
-                # --- PROACTIVE OPTIMIZATION: PICK A RANDOM VIDEO FROM TOP 6 RESULTS TO STOP REPETITION ---
-                # This ensures we get dynamic, diverse visual variety on every single render run!
                 selected_v = random.choice(videos[:min(len(videos), 6)])
                 video_id = selected_v.get("id")
                 
-                # Cache using both the query name AND the unique video ID so they never overwrite each other!
                 local_path = os.path.join(B_ROLL_DIR, f"{clean_query.lower()}_{video_id}_916.mp4")
                 if os.path.exists(local_path):
                     return local_path
@@ -130,13 +163,16 @@ def download_pexels_b_roll(query, api_key):
 
 # --- PEXELS AUTOMATED BACKUP KEYWORD DOWNLOADER (PREVENTS BLANK BACKGROUNDS) ---
 def download_pexels_b_roll_with_fallback(query, api_key):
-    clip = download_pexels_b_roll(query, api_key)
+    # Proactively expand our keyword into a cinematic visual search term!
+    expanded_query = expand_keyword_to_concept(query)
+    
+    clip = download_pexels_b_roll(expanded_query, api_key)
     if clip and os.path.exists(clip):
         return clip
         
     backups = ["moody dark", "urban night", "focused student", "ticking clock", "rain window", "cyberpunk city", "financial trade"]
     backup_query = random.choice(backups)
-    print(f"Pexels primary '{query}' returned no results. Auto-downloading backup: '{backup_query}'")
+    print(f"Pexels primary expanded '{expanded_query}' returned no results. Auto-downloading backup: '{backup_query}'")
     return download_pexels_b_roll(backup_query, api_key)
 
 # --- CINEMATIC ANIMATED PRESET GENERATOR WITH PARTICLES & VIGNETTE ---
@@ -271,7 +307,6 @@ def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basena
             f_sub.write(submaker.get_srt())
             
     try:
-        # Run natively and thread-safely
         run_async_in_thread(amain())
         return audio_path, srt_path
     except Exception as e:
@@ -305,19 +340,15 @@ def make_vertical_clip(clip, target_w=720, target_h=1280):
     target_aspect = target_w / target_h
     current_aspect = w / h
     
-    # Calculate cropping boundaries on original dimensions first
     if current_aspect > target_aspect:
-        # Source is wider (horizontal), crop left & right margins
         new_w = int(h * target_aspect)
         left = (w - new_w) // 2
         cropped_clip = clip.cropped(x1=left, y1=0, width=new_w, height=h)
     else:
-        # Source is taller, crop top & bottom margins
         new_h = int(w / target_aspect)
         top = (h - new_h) // 2
         cropped_clip = clip.cropped(x1=0, y1=top, width=w, height=new_h)
         
-    # Resize the perfectly cropped vertical clip directly to standard vertical size
     return cropped_clip.resized(width=target_w, height=target_h)
 
 # --- DYNAMIC WORD-BY-WORD CHOPPER ---
@@ -435,14 +466,20 @@ def make_progress_bar_clip(duration, width=720, height=1280, bar_height=10, bar_
         return np.array(img)
     return VideoClip(make_frame, duration=duration)
 
-# --- UPGRADED CAPTIONS GENERATOR (WITH DYNAMIC JUMP-BOUNCE ANIMATION & COMPACT WINDOWS FONTS) ---
+# --- UPGRADED CAPTIONS GENERATOR (WITH AD-HD POWER WORDS + SFX TRIGGERS + DYNAMIC PRESETS) ---
 def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='yellow', caption_style='standard'):
     display_subs = subtitles
     actual_font_size = font_size
     
-    if caption_style == 'word_pop':
+    # Check if a custom style theme is selected under caption_style
+    # Themes: Hormozi, Cyberpunk, Minimalist
+    caption_theme = str(caption_style).lower()
+    
+    is_word_pop = "hormozi" in caption_theme or "cyberpunk" in caption_theme or "word_pop" in caption_theme
+    
+    if is_word_pop:
         display_subs = split_subtitles_into_words(subtitles, words_per_clip=1)
-        actual_font_size = int(font_size * 0.95) # Compact fitting
+        actual_font_size = int(font_size * 0.95)
         
     text_clips = []
     sfx_clips = []
@@ -470,31 +507,55 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
         txt = s['text']
         clean_w = re.sub(r'[^\w]', '', txt.lower())
         
-        word_color = color
+        # Default Theme: Hormozi Gold style (Yellow / Green bold)
+        word_color = "#FFD700" if color == "yellow" else color
         word_size = actual_font_size
+        stroke_color = "black"
+        stroke_width = 4
         is_power = False
         
-        if caption_style == 'word_pop' and clean_w in POWER_WORDS:
-            txt = f"{POWER_WORDS[clean_w]} {txt}"
-            word_color = "#39FF14"
-            word_size = int(actual_font_size * 1.15)
-            is_power = True
+        # Apply Preset Themes
+        if "cyberpunk" in caption_theme:
+            word_color = "#00FFFF" # Tense Cyan
+            if clean_w in POWER_WORDS:
+                txt = f"⚡ {txt}"
+                word_color = "#FF00FF" # Neon Pink on power words!
+                word_size = int(actual_font_size * 1.15)
+                is_power = True
+        elif "minimalist" in caption_theme:
+            word_color = "#FFFFFF" # Clean Minimal White
+            stroke_color = "black"
+            stroke_width = 2
+            if clean_w in POWER_WORDS:
+                word_color = "#F5921D" # Soft Orange accent
+                word_size = int(actual_font_size * 1.10)
+                is_power = True
+        else:
+            # Hormozi style (Default)
+            if clean_w in POWER_WORDS:
+                txt = f"{POWER_WORDS[clean_w]} {txt}"
+                word_color = "#39FF14" # Neon Green
+                word_size = int(actual_font_size * 1.18)
+                is_power = True
             
         txt_clip = TextClip(
             text=txt, 
-            font="Arial", # Force Arial compact standard
+            font="Arial", # Windows Standard Font, 100% clean and compact
             font_size=word_size, 
             color=word_color, 
-            stroke_color='black', 
-            stroke_width=4, 
+            stroke_color=stroke_color, 
+            stroke_width=stroke_width, 
             method='caption', 
             size=(target_w - 120, None), 
             text_align='center'
         )
         
-        # --- DYNAMIC WORD BOUNCE ZOOM ANIMATION ---
+        # --- PREMIUM DYNAMIC WORD BOUNCE ZOOM ANIMATION ---
         try:
-            bouncy_txt_clip = txt_clip.resized(lambda t: min(1.0, 0.85 + (0.15 / 0.07) * t) if t < 0.07 else 1.0)
+            if "minimalist" not in caption_theme: # bounce only for active styles!
+                bouncy_txt_clip = txt_clip.resized(lambda t: min(1.0, 0.85 + (0.15 / 0.07) * t) if t < 0.07 else 1.0)
+            else:
+                bouncy_txt_clip = txt_clip
         except:
             bouncy_txt_clip = txt_clip
             
@@ -540,7 +601,7 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 
 
 # ==============================================================================
-# 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE (WITH EXPLICIT YUV420P PIX FMT) 🧬
+# 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
 # ==============================================================================
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
     # --- PROACTIVE WINDOWS FILE LOCK AVOIDANCE (WinError 32): USE TIMESTAMPED FILENAMES ---
@@ -555,6 +616,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
     audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_hybrid")
     
+    # Read custom layout/pacing parameters
     db_caption_style = db_settings.get_setting("caption_style", "word_pop")
     db_music_volume = float(db_settings.get_setting("bg_music_volume", 0.12))
     db_font_size = int(db_settings.get_setting("font_size", 55))
@@ -567,7 +629,8 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
     duration = voice_audio.duration
     
-    cut_duration = 2.0
+    # --- PROACTIVE UPGRADE: FLEXIBLE CUT PACING (ADHD vs Standard vs Mindful) ---
+    cut_duration = float(kwargs.get("cut_duration", 2.0))
     num_cuts = int(np.ceil(duration / cut_duration))
     
     progress_cb_step_weight = 0.40 / num_cuts
