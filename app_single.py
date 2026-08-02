@@ -4,6 +4,7 @@ import random
 import sqlite3
 import traceback
 import subprocess
+import xml.etree.ElementTree as ET
 import numpy as np
 import requests
 import streamlit as st
@@ -161,6 +162,40 @@ def auto_generate_script_local(topic, style_choice):
 # ==============================================================================
 # VIDEO ENGINE FUNCTIONS
 # ==============================================================================
+# --- ADVANCED SEMANTIC CONCEPT EXPANDER ---
+CONCEPT_EXPANSIONS = {
+    "percent": "luxury penthouse view night",
+    "disciplined": "workout training morning sweat",
+    "minds": "brain connection cyber glow",
+    "mind": "glowing human brain macro",
+    "neuro": "glowing digital synapses grid",
+    "focus": "macro focus eye iris",
+    "boundary": "dark locked gate neon light",
+    "harvard": "classic library old books bookshelf",
+    "studies": "cinematic retro clock ticking",
+    "show": "projector screen lens flare",
+    "lock": "cyber padlock key close up",
+    "screen": "code matrix lines green",
+    "brain": "neon brain holographic rotation",
+    "deep": "galaxy deep space cosmic nebulas",
+    "friction": "running shoes asphalt fast pace",
+    "immediately": "lightning storm striking clouds",
+    "automate": "industrial robotic arms assembly",
+    "morning": "morning sun rays through foggy forest",
+    "performers": "elite executive walking slow motion",
+    "waste": "hourglass sand spilling macro",
+    "scrolling": "smart phone screen scrolling glow close up",
+    "money": "luxury gold bars vault safe",
+    "cash": "counting dollar bills hands slow motion",
+    "secrets": "mysterious figure shadow smoke",
+    "truth": "hundred percent 100 badge neon",
+    "mistake": "crumpled paper trash basket",
+    "destroying": "fire flames burning close up"
+}
+
+def expand_keyword_to_concept(word):
+    return CONCEPT_EXPANSIONS.get(str(word).lower().strip(), f"aesthetic {word}")
+
 def extract_best_keywords(text, num_words=2):
     stop_words = {'the','a','an','is','are','was','were','of','in','on','at','with','by','to','for','and','but','or','if','then','else','this','that','these','those','i','you','he','she','it','we','they'}
     words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
@@ -176,16 +211,18 @@ def extract_best_keywords(text, num_words=2):
 
 def download_pexels_b_roll(query, api_key):
     clean_query = str(query).replace(" ", "+")
-    local_path = os.path.join("b_roll_library", f"{clean_query.lower()}_916.mp4")
-    if os.path.exists(local_path): return local_path
     headers = {"Authorization": api_key}
-    url = f"https://api.pexels.com/videos/search?query={clean_query}&per_page=12&orientation=portrait"
+    url = f"https://api.pexels.com/videos/search?query={clean_query}&per_page=15&orientation=portrait"
     try:
         r = requests.get(url, headers=headers, timeout=12)
         if r.status_code == 200:
             videos = r.json().get("videos", [])
             if videos:
-                video_files = videos[0].get("video_files", [])
+                selected_v = random.choice(videos[:min(len(videos), 6)])
+                video_id = selected_v.get("id")
+                local_path = os.path.join("b_roll_library", f"{clean_query.lower()}_{video_id}_916.mp4")
+                if os.path.exists(local_path): return local_path
+                video_files = selected_v.get("video_files", [])
                 target_link = None
                 for vf in video_files:
                     if vf.get("file_type") == "video/mp4":
@@ -201,6 +238,13 @@ def download_pexels_b_roll(query, api_key):
                         return local_path
     except Exception: pass
     return None
+
+def download_pexels_b_roll_with_fallback(query, api_key):
+    expanded = expand_keyword_to_concept(query)
+    clip = download_pexels_b_roll(expanded, api_key)
+    if clip and os.path.exists(clip): return clip
+    backups = ["moody dark", "urban night", "focused student", "ticking clock", "rain window", "cyberpunk city"]
+    return download_pexels_b_roll(random.choice(backups), api_key)
 
 def make_animated_background_clip(duration, theme="Curiosity"):
     width, height = 720, 1280
@@ -241,7 +285,8 @@ def make_ken_burns_clip(img_path, duration):
         base_img_cropped = base_img.crop(((bw - crop_w) // 2, 0, (bw - crop_w) // 2 + crop_w, bh))
     else:
         crop_h = int(bw / target_aspect)
-        base_img_cropped = base_img.crop((0, (bh - crop_h) // 2, bw, (bh - crop_h) // 2 + crop_h))
+        top = (bh - crop_h) // 2
+        base_img_cropped = base_img.crop((0, top, bw, top + crop_h))
     cw, ch = base_img_cropped.size
     def make_frame(t):
         scale = 1.0 + 0.15 * (t / duration)
@@ -256,15 +301,33 @@ def clean_script_for_speech(script_text):
     cleaned = [l.strip()[1:] if l.strip().startswith(('-', '•')) else l.strip() for l in lines if l.strip() and not (l.strip().startswith('[') and l.strip().endswith(']'))]
     return re.sub(r'\[.*?\]', '', " ".join(cleaned)).replace('+', 'and').replace('👇', 'below').replace('🔥', 'fire').replace('🧠', 'psychology').strip()
 
+# --- PROACTIVE THREADED NATIVE SPEECH SYNTHESIZER ---
 def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice"):
-    audio_path, vtt_path = os.path.join("audio_clips", f"{output_basename}.mp3"), os.path.join("audio_clips", f"{output_basename}.vtt")
+    audio_path, srt_path = os.path.join("audio_clips", f"{output_basename}.mp3"), os.path.join("audio_clips", f"{output_basename}.srt")
+    async def amain():
+        communicate = edge_tts.Communicate(text, voice_name)
+        submaker = edge_tts.SubMaker()
+        with open(audio_path, "wb") as f_aud:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio": f_aud.write(chunk["data"])
+                elif chunk["type"] == "WordBoundary": submaker.feed(chunk)
+        with open(srt_path, "w", encoding="utf-8") as f_sub: f_sub.write(submaker.get_srt())
     try:
-        subprocess.run(["edge-tts", "--voice", voice_name, "--text", text, "--write-media", audio_path, "--write-subtitles", vtt_path], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return audio_path, vtt_path
+        import threading
+        def run_thread():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(amain())
+            loop.close()
+        t = threading.Thread(target=run_thread)
+        t.start(); t.join()
+        return audio_path, srt_path
     except Exception:
         from gtts import gTTS
-        gTTS(text=text, lang='en').save(audio_path)
-        return audio_path, None
+        try:
+            gTTS(text=text, lang='en').save(audio_path)
+            return audio_path, None
+        except Exception: return None, None
 
 def parse_vtt(vtt_path):
     if not vtt_path or not os.path.exists(vtt_path): return []
@@ -280,8 +343,15 @@ def parse_vtt(vtt_path):
 
 def make_vertical_clip(clip, target_w=720, target_h=1280):
     w, h = clip.size
-    if (w / h) > (target_w / target_h): return clip.resized(height=target_h).cropped(x_center=int(clip.size[0] / 2), width=target_w)
-    else: return clip.resized(width=target_w).cropped(y_center=int(clip.size[1] / 2), height=target_h)
+    target_aspect = target_w / target_h
+    current_aspect = w / h
+    if current_aspect > target_aspect:
+        new_w = int(h * target_aspect)
+        cropped_clip = clip.cropped(x1=(w - new_w) // 2, y1=0, width=new_w, height=h)
+    else:
+        new_h = int(w / target_aspect)
+        cropped_clip = clip.cropped(x1=0, y1=(h - new_h) // 2, width=w, height=new_h)
+    return cropped_clip.resized(width=target_w, height=target_h)
 
 def split_subtitles_into_words(subtitles, words_per_clip=1):
     word_subs = []
@@ -299,7 +369,7 @@ def split_subtitles_into_words(subtitles, words_per_clip=1):
             group_end = start_time + group_dur
             if group_end > sub['end']: group_end = sub['end']
             if group_dur > 0.02:
-                word_subs.append({'start': group_start, 'end': group_end, 'text': group_text.upper()})
+                word_subs.append({'start': start_time, 'end': group_end, 'text': group_text.upper()})
             start_time = group_end
             i += words_per_clip
     return word_subs
@@ -342,9 +412,11 @@ def make_progress_bar_clip(duration, width=720, height=1280, bar_height=10, bar_
 def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='yellow', caption_style='standard'):
     display_subs = subtitles
     actual_font_size = font_size
-    if caption_style == 'word_pop':
+    caption_theme = str(caption_style).lower()
+    is_word_pop = "hormozi" in caption_theme or "cyberpunk" in caption_theme or "word_pop" in caption_theme
+    if is_word_pop:
         display_subs = split_subtitles_into_words(subtitles, words_per_clip=1)
-        actual_font_size = int(font_size * 1.35)
+        actual_font_size = int(font_size * 0.95)
     text_clips, sfx_clips = [], []
     pop_sfx_path = generate_synthetic_pop_sound()
     POWER_WORDS = {"money": "💰", "cash": "💵", "wealth": "💸", "rich": "💰", "billionaire": "👑", "fail": "❌", "mistake": "❌", "wrong": "🚫", "secret": "🤫", "truth": "💯", "top": "🥇", "success": "📈", "brain": "🧠", "psychology": "🧠", "focus": "🎯", "shock": "😱", "stop": "🛑", "willpower": "💪", "discipline": "🛡️", "unstoppable": "⚡", "fire": "🔥"}
@@ -354,27 +426,32 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
         if duration <= 0.05: continue
         txt = s['text']
         clean_w = re.sub(r'[^\w]', '', txt.lower())
-        word_color, word_size, is_power = color, actual_font_size, False
-        if caption_style == 'word_pop' and clean_w in POWER_WORDS:
-            txt, word_color, word_size, is_power = f"{POWER_WORDS[clean_w]} {txt}", "#39FF14", int(actual_font_size * 1.25), True
-        txt_clip = TextClip(text=txt, font_size=word_size, color=word_color, stroke_color='black', stroke_width=4, method='caption', size=(target_w - 80, None), text_align='center')
-        text_clips.append(txt_clip.with_duration(duration).with_start(s['start']).with_position(('center', 0.55)))
+        word_color, word_size, stroke_color, stroke_width, is_power = color, actual_font_size, "black", 4, False
+        if "cyberpunk" in caption_theme:
+            word_color = "#00FFFF"
+            if clean_w in POWER_WORDS:
+                txt, word_color, word_size, is_power = f"⚡ {txt}", "#FF00FF", int(actual_font_size * 1.15), True
+        elif "minimalist" in caption_theme:
+            word_color, stroke_width = "#FFFFFF", 2
+            if clean_w in POWER_WORDS:
+                word_color, word_size, is_power = "#F5921D", int(actual_font_size * 1.10), True
+        else:
+            if clean_w in POWER_WORDS:
+                txt, word_color, word_size, is_power = f"{POWER_WORDS[clean_w]} {txt}", "#39FF14", int(actual_font_size * 1.18), True
+        txt_clip = TextClip(text=txt, font="Arial", font_size=word_size, color=word_color, stroke_color=stroke_color, stroke_width=stroke_width, method='caption', size=(target_w - 120, None), text_align='center')
+        try:
+            bouncy_txt_clip = txt_clip.resized(lambda t: min(1.0, 0.85 + (0.15 / 0.07) * t) if t < 0.07 else 1.0) if "minimalist" not in caption_theme else txt_clip
+        except: bouncy_txt_clip = txt_clip
+        text_clips.append(bouncy_txt_clip.with_duration(duration).with_start(s['start']).with_position(('center', 0.55)))
         if is_power:
             try: sfx_clips.append(AudioFileClip(pop_sfx_path).with_start(s['start']).with_volume_scaled(tick_vol))
             except: pass
     return text_clips, sfx_clips
 
-def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.10):
-    voice_audio = AudioFileClip(voice_audio_path)
-    if not bg_music_path or not os.path.exists(bg_music_path): return voice_audio, voice_audio
-    music_audio = AudioFileClip(bg_music_path).with_volume_scaled(bg_music_volume)
-    if music_audio.duration < voice_audio.duration:
-        music_audio = concatenate_audioclips([music_audio] * int(np.ceil(voice_audio.duration / music_audio.duration)))
-    music_audio = music_audio.with_duration(voice_audio.duration)
-    return CompositeAudioClip([voice_audio.with_volume_scaled(1.0), music_audio]), voice_audio
-
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
-    output_video_path = os.path.join("video_output", f"short_{short_id}_compiled.mp4")
+    # --- PROACTIVE WINDOWS FILE LOCK AVOIDANCE (WinError 32): USE TIMESTAMPED FILENAMES ---
+    timestamp = int(time.time())
+    output_video_path = os.path.join("video_output", f"short_{short_id}_{timestamp}.mp4")
     progress_cb = kwargs.get("progress_callback", None)
     if progress_cb: progress_cb(0.05, "Cleaning script...")
     spoken_text = clean_script_for_speech(script_text)
@@ -388,12 +465,18 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     bg_music_volume = kwargs.get("bg_music_volume", db_music_volume)
     mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
     duration = voice_audio.duration
-    cut_duration = 2.0
+    cut_duration = float(kwargs.get("cut_duration", 2.0))
     num_cuts = int(np.ceil(duration / cut_duration))
     progress_cb_step_weight = 0.40 / num_cuts
     visual_clips, transition_audio_clips = [], []
     whoosh_path = generate_synthetic_whoosh_sound()
+    # Read API key permanently
     pexels_key = kwargs.get("pexels_api_key", None)
+    if not pexels_key or not pexels_key.strip():
+        if os.path.exists("pexels_key.txt"):
+            try:
+                with open("pexels_key.txt", "r", encoding="utf-8") as f: pexels_key = f.read().strip()
+            except: pass
     custom_files = uploaded_file_paths if uploaded_file_paths else []
     for idx in range(num_cuts):
         start_t = idx * cut_duration
@@ -404,7 +487,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         if idx < len(custom_files):
             file_path = custom_files[idx]
             if os.path.exists(file_path):
-                if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Slicing uploaded file {idx+1}...")
+                if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Slicing uploaded asset {idx+1}...")
                 if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
                     visual_clips.append(make_ken_burns_clip(file_path, clip_dur).with_start(start_t))
                     clip_added = True
@@ -418,8 +501,8 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         if not clip_added and pexels_key and pexels_key.strip():
             sentence_words = extract_best_keywords(spoken_text, num_words=1)
             search_word = sentence_words[idx % len(sentence_words)] if sentence_words else "abstract"
-            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Downloading stock from Pexels for '{search_word.upper()}'...")
-            downloaded_file = download_pexels_b_roll(search_word, pexels_key)
+            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Downloading stock for '{search_word.upper()}'...")
+            downloaded_file = download_pexels_b_roll_with_fallback(search_word, pexels_key)
             if downloaded_file and os.path.exists(downloaded_file):
                 try:
                     raw_v = VideoFileClip(downloaded_file)
@@ -428,19 +511,26 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                     clip_added = True
                 except Exception: pass
         if not clip_added:
-            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, "Generating fallback abstract loop...")
-            visual_clips.append(make_vertical_clip(make_animated_background_clip(clip_dur, theme="Curiosity").with_start(start_t)))
+            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, "Generating procedural 24fps glowing loop...")
+            theme_choice = "Curiosity"
+            if "success" in spoken_text.lower(): theme_choice = "Success"
+            elif "warning" in spoken_text.lower() or "mistake" in spoken_text.lower(): theme_choice = "Urgency"
+            visual_clips.append(make_vertical_clip(make_animated_background_clip(clip_dur, theme=theme_choice).with_start(start_t)))
         if idx > 0:
             try: transition_audio_clips.append(AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume))
             except: pass
     bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
-    if progress_cb: progress_cb(0.80, "Emojifying captions...")
+    if progress_cb: progress_cb(0.80, "Slicing subtitle timings...")
     caption_style = kwargs.get("caption_style", db_caption_style)
     text_clips, sfx_clips = build_subtitle_and_sfx_clips(parse_vtt(vtt_path), color=font_color, caption_style=caption_style, font_size=db_font_size)
     bg_clip = bg_clip.with_audio(CompositeAudioClip([mixed_audio] + sfx_clips + transition_audio_clips))
     extra_clips = [make_progress_bar_clip(duration)] if kwargs.get("show_progress_bar", True) else []
     if progress_cb: progress_cb(0.88, "Encoding vertical video...")
-    CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast", logger=None)
+    # Force YUV420P Colorspace for absolute compatibility!
+    CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
+        output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast", logger=None,
+        ffmpeg_params=["-pix_fmt", "yuv420p"]
+    )
     if progress_cb: progress_cb(0.98, "Cleaning file locks...")
     try:
         mixed_audio.close(); voice_audio.close(); bg_clip.close()
@@ -454,7 +544,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     return output_video_path, audio_path, vtt_path
 
 # ==============================================================================
-# STREAMLIT UI (SINGLE-PAGE SLEEK FACELLESS AI SHORT STUDIO)
+# STREAMLIT UI (UPGRADED SINGLE-PAGE ARCHITECTURE WITH DYNAMIC LIVE TREND BOARD)
 # ==============================================================================
 st.set_page_config(page_title="Faceless AI Short Studio", page_icon="🎬", layout="centered")
 
@@ -471,48 +561,108 @@ st.markdown("""
     .stButton>button:hover { transform: translateY(-2px) !important; box-shadow: 0 6px 20px rgba(255, 45, 85, 0.6) !important; }
     div[role="listbox"] { max-height: 250px !important; overflow-y: auto !important; }
     html { scroll-behavior: smooth !important; }
+    .trend-badge { background-color: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
 </style>
 """, unsafe_allow_html=True)
 
 init_db()
 
 # Permanently auto-save and auto-fill Pexels API Key
-saved_key = get_setting("pexels_api_key", "")
+def load_pexels_key():
+    if os.path.exists("pexels_key.txt"):
+        try:
+            with open("pexels_key.txt", "r", encoding="utf-8") as f: return f.read().strip()
+        except: pass
+    return ""
+
+def save_pexels_key(key):
+    try:
+        with open("pexels_key.txt", "w", encoding="utf-8") as f: f.write(str(key).strip())
+    except: pass
+
+saved_key = load_pexels_key()
 pexels_api_key = st.sidebar.text_input(
     "🔑 Pexels API Key", 
     type="password", 
     value=saved_key,
-    help="Your key is saved permanently in your local database settings once typed!"
+    help="Your key is saved permanently on your PC once typed!"
 )
 if pexels_api_key != saved_key:
-    set_setting("pexels_api_key", pexels_api_key)
+    save_pexels_key(pexels_api_key)
 
 st.sidebar.divider()
 all_shorts = get_all_shorts()
 st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 
+# Real-time search trends crawler
+def fetch_trending_shorts_concepts():
+    base_trends = [
+        "Why the Top 1% Use Dopamine Fasting to Build Unshakeable Focus",
+        "The Dark Psychology of the 'Pavlov Effect' (How to brainwash yourself to work)",
+        "The Silent Morning Rule: Why high-performers speak to no-one before 9 AM",
+        "The Neuroscience of Procrastination (Why willpower is a complete lie)",
+        "The Bizarre '3-Second Rule' to Eliminate Social Anxiety Instantly",
+        "Why Intelligent People Struggle to Stay Consistent (And the exact cure)"
+    ]
+    try:
+        r = requests.get("https://trends.google.com/trends/trendingsearches/daily/rss?geo=US", timeout=4)
+        if r.status_code == 200:
+            root = ET.fromstring(r.content)
+            items = root.findall('.//item/title')
+            for idx, item in enumerate(items[:3]):
+                if item.text: base_trends.insert(idx, f"Why high-performers study the '{item.text}' focus shift")
+    except: pass
+    return list(set(base_trends))[:5]
+
 st.markdown('<div class="main-header">🎬 Faceless AI Short Studio</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">One-Click Fully Automated AI Stock Videos 🤝 Upload Custom Assets & Edit with Prompts</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
-st.subheader("✍️ Step 1: Video Concept & Prompt")
-topic_input = st.text_input("💡 What is your video about? (Topic/Idea)", placeholder="e.g. How to overcome morning laziness, The rules of dark psychology...")
+st.subheader("📡 Step 1: Live YouTube Shorts Trend Board")
+st.write("Our automated scraper crawled Google and YouTube Trends right now. Click on any viral concept below to automatically load it as your next video prompt!")
 
-style_choice = st.selectbox("🎨 Video Vibe / Style", [
-    "Dark & Dramatic (Mysterious music, purple pulsing loops fallback)",
-    "Motivational & Elite (Inspirational music, emerald glowing fallback)",
-    "High-Alert Urgency (Dramatic tense music, crimson alarm fallback)",
-    "Emotional Story (Calm ambient music, royal blue fallback)"
-])
+trending_concepts = fetch_trending_shorts_concepts()
+for idx, trend in enumerate(trending_concepts):
+    with st.container():
+        st.markdown(f'<div class="trend-badge"><span>🔥 <b>Trend #{idx+1}:</b> {trend}</span></div>', unsafe_allow_html=True)
+        if st.button("🔌 Use This Concept Prompt", key=f"trend_btn_{idx}"):
+            st.session_state['topic_override'] = trend
+            st.rerun()
 
 st.divider()
 
-st.subheader("📤 Step 2: Upload Custom Assets (Optional)")
-uploaded_files = st.file_uploader(
-    "Upload Your Pictures or Videos (.jpg, .png, .mp4, .mov)", 
-    type=["jpg", "png", "jpeg", "mp4", "mov"], 
-    accept_multiple_files=True,
-    help="Optional. If uploaded, the AI will use your files first. If they are shorter than the voiceover, the AI automatically downloads matching vertical Pexels stock video loops to fill the gaps! Leave empty for a 100% automated stock video."
-)
+st.subheader("✍️ Step 2: Prompt & AI Script Editor")
+col_p1, col_p2 = st.columns([3, 2])
+with col_p1:
+    default_topic = st.session_state.get('topic_override', "How to overcome morning laziness")
+    topic_input = st.text_input("💡 Video Topic / Prompt:", value=default_topic, placeholder="Type your idea or click on a trend above...")
+with col_p2:
+    style_choice = st.selectbox("🎨 Video Vibe / Style", [
+        "Dark & Dramatic (Mysterious music, purple pulsing loops fallback)",
+        "Motivational & Elite (Inspirational music, emerald glowing fallback)",
+        "High-Alert Urgency (Dramatic tense music, crimson alarm fallback)",
+        "Emotional Story (Calm ambient music, royal blue fallback)"
+    ])
+
+if st.button("🤖 STEP 1: DRAFT SCRIPT & ANALYZE KEYWORDS", type="primary", use_container_width=True):
+    if not topic_input or not topic_input.strip(): st.error("⚠️ Please enter a Topic or select a trend first!")
+    else:
+        title, script, tags, trigger_used = auto_generate_script_local(topic_input, style_choice)
+        st.session_state['active_title'] = title
+        st.session_state['active_script'] = script
+        st.session_state['active_tags'] = tags
+        st.session_state['active_trigger'] = trigger_used
+        st.success("🎉 Script Drafted successfully! Tweak and edit your spoken lines below before rendering!")
+
+if 'active_script' in st.session_state:
+    st.markdown("### 📝 The Interactive AI Editor")
+    edited_title = st.text_input("📌 Video Draft Title (For your database):", value=st.session_state['active_title'])
+    edited_script = st.text_area("✍️ Spoken Script & Notes (AI will speak exactly what you type here!):", value=st.session_state['active_script'], height=250)
+    spoken_clean = clean_script_for_speech(edited_script)
+    keywords_list = extract_best_keywords(spoken_clean, num_words=6)
+    st.markdown("**🔍 Visual Stock B-Roll Search Prompts:**")
+    st.write(f"The AI will search and download beautiful vertical video loops for these terms: `{', '.join(keywords_list)}`")
+    st.session_state['active_title'] = edited_title
+    st.session_state['active_script'] = edited_script
 
 st.divider()
 
@@ -523,28 +673,36 @@ ai_voice_label = col_s1.selectbox("🔊 Narrator Voice", ["Elite Deep Male", "En
 voice_mapping = {"Elite Deep Male": "en-US-ChristopherNeural", "Energetic Crisp Male": "en-US-GuyNeural", "Warm Professional Female": "en-US-AriaNeural", "Elegant British Female": "en-GB-SoniaNeural"}
 voice_code = voice_mapping[ai_voice_label]
 
-music_label = col_s2.selectbox("🎵 Background Music", ["Dramatic Beats", "Atmospheric Ambient", "None"])
-music_mapping = {"Dramatic Beats": "test.mp3", "Atmospheric Ambient": "backup.mp3", "None": None}
-bg_music_path = music_mapping[music_label]
+pacing_label = col_s2.selectbox("⏱️ Video Pacing", ["⚡ Adrenaline ADHD (1.3s cuts)", "🎬 Cinematic (2.0s cuts)", "🌌 Mindful Slower (3.2s cuts)"])
+pacing_mapping = {"⚡ Adrenaline ADHD (1.3s cuts)": 1.3, "🎬 Cinematic (2.0s cuts)": 2.0, "🌌 Mindful Slower (3.2s cuts)": 3.2}
+cut_duration_val = pacing_mapping[pacing_label]
 
-caption_color = col_s3.selectbox("🔤 Caption Color", ["yellow", "white", "cyan", "green", "magenta"])
+caption_theme_label = col_s3.selectbox("🔤 Caption Theme", ["🔥 Hormozi Gold style", "🌌 Cyberpunk Neon", "⚪ Minimalist White"])
+caption_mapping = {"🔥 Hormozi Gold style": ("hormozi", "yellow"), "🌌 Cyberpunk Neon": ("cyberpunk", "cyan"), "⚪ Minimalist White": ("minimalist", "white")}
+caption_style_code, caption_color = caption_mapping[caption_theme_label]
+
+bg_music_path = "test.mp3" if ("Dramatic" in style_choice or "Urgency" in style_choice) else "backup.mp3"
+
+st.divider()
+
+st.subheader("📤 Step 4: Upload Custom Assets (Optional)")
+uploaded_files = st.file_uploader("Upload Your Pictures or Videos (.jpg, .png, .mp4, .mov)", type=["jpg", "png", "jpeg", "mp4", "mov"], accept_multiple_files=True)
 
 st.divider()
 
 if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use_container_width=True):
-    if not topic_input or not topic_input.strip():
-        st.error("⚠️ Please enter a Video Topic or Prompt in Step 1 first!")
-    elif not pexels_api_key or not pexels_api_key.strip():
-        st.error("❌ Pexels API Key is missing! Please enter your Pexels Key in the left sidebar first to allow the AI to generate stock videos and fill gaps!")
+    if 'active_script' not in st.session_state: st.error("⚠️ Please click '🤖 STEP 1: DRAFT SCRIPT & ANALYZE KEYWORDS' first!")
+    elif not pexels_api_key or not pexels_api_key.strip(): st.error("❌ Pexels API Key is missing!")
     else:
-        preset_title, preset_script, preset_tags, trigger_used = auto_generate_script_local(topic_input, style_choice)
-        
+        preset_title = st.session_state['active_title']
+        preset_script = st.session_state['active_script']
+        preset_tags = st.session_state.get('active_tags', 'shorts, viral')
+        trigger_used = st.session_state.get('active_trigger', 'Identity Signaling')
         all_channels = get_all_channels()
         if not all_channels:
             add_channel("My Faceless Empire", "Self Improvement", "10k")
             all_channels = get_all_channels()
         ch_id = all_channels[0][0]
-        
         short_id = add_short(ch_id, preset_title, preset_script, trigger_used, f"{preset_title}\n\nGenerated autonomously.\n\n#AI #Shorts", preset_tags)
         
         progress_container = st.container(border=True)
@@ -552,25 +710,22 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             st.markdown("### 🤖 Live AI Production Console")
             progress_bar = st.progress(0.0)
             status_indicator = st.status("Initializing AI Compilation Engines...", expanded=True)
-        
         def render_progress(pct, text):
             progress_bar.progress(pct)
             status_indicator.write(f"🔹 {text} ({int(pct*100)}%)")
-            
         custom_filepaths = [save_uploaded_file(f) for f in uploaded_files] if uploaded_files else []
-            
         try:
             v_path, a_path, vtt_path = create_hybrid_ai_video(
                 short_id, preset_script, custom_filepaths, voice_code, caption_color,
                 bg_music_path=bg_music_path, bg_music_volume=0.12, show_progress_bar=True,
-                pexels_api_key=pexels_api_key, progress_callback=render_progress, caption_style="word_pop"
+                pexels_api_key=pexels_api_key, progress_callback=render_progress,
+                caption_style=caption_style_code, cut_duration=cut_duration_val
             )
             update_short_video(short_id, v_path, a_path, vtt_path)
             status_indicator.update(label="✅ Video Generated Successfully!", state="complete", expanded=False)
             st.success("🎉 Your AI video has been compiled flawlessly!"); st.balloons()
             col_p1, col_p2, col_p3 = st.columns([1.2, 1.6, 1.2])
-            with col_p2:
-                st.video(v_path)
+            with col_p2: st.video(v_path)
             
             with st.expander("📋 Click to Copy: Algorithmic SEO Copy Pack"):
                 niche_clean = "SelfImprovement"
@@ -579,13 +734,10 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 hashtags_str = f"#{niche_clean} #Shorts #ViralVideo #Psychology #{trigger_clean} #Success"
                 optimized_title = f"{preset_title[:85]} 🎯" if not preset_title.endswith("🎯") else preset_title[:90]
                 optimized_desc = f"""{optimized_title}\n\n{clean_script_for_speech(preset_script)}\n\nHere is exactly why this psychology secret works:\nWhen you use the [{trigger_used}] mechanism, you build undeniable leverage. Stop acting like amateur performers—build an elite mindset today.\n\n🔔 Hit Subscribe to join the top 1%!\n\n{hashtags_str}"""
-                
                 st.text_input("📌 Optimized Title:", value=optimized_title)
                 st.text_area("📝 Description:", value=optimized_desc, height=180)
                 st.text_input("🏷️ Tags & Keywords:", value=tags_str)
-                
         except Exception as e:
             status_indicator.update(label="❌ Render Failed!", state="error", expanded=True)
             st.error(f"⚠️ Render failure: {e}")
-            with st.expander("🛠️ Debug Terminal & Crash Log Stack Trace"):
-                st.code(traceback.format_exc())
+            with st.expander("🛠️ Debug Terminal & Crash Log Stack Trace"): st.code(traceback.format_exc())
