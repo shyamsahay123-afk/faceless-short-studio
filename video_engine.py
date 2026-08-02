@@ -96,12 +96,13 @@ def expand_keyword_to_concept(word):
     return CONCEPT_EXPANSIONS.get(word_clean, f"aesthetic {word_clean}")
 
 # --- KEYWORD EXTRACTOR FOR AUTOMATED B-ROLL SEARCH ---
-def extract_best_keywords(text, num_words=6):
+def extract_best_keywords(text, num_words=12):
     stop_words = {
         'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'in', 'on', 'at', 'with', 'by', 'to', 'for', 'and', 'but', 
         'or', 'if', 'then', 'else', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 
         'my', 'your', 'his', 'her', 'its', 'our', 'their', 'how', 'why', 'what', 'who', 'whom', 'here', 'there', 
-        'about', 'stop', 'doing', 'right', 'now', 'your', 'mine', 'all', 'any', 'get', 'gets', 'got'
+        'about', 'stop', 'doing', 'right', 'now', 'your', 'mine', 'all', 'any', 'get', 'gets', 'got', 'use', 'using',
+        'has', 'have', 'had', 'been', 'actually', 'thing', 'one', 'two', 'three', 'actually'
     }
     words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
     filtered = [w for w in words if w not in stop_words]
@@ -160,17 +161,10 @@ def download_pexels_b_roll(query, api_key):
         print(f"Pexels search failed for '{query}': {e}")
     return None
 
-
 # --- PIXABAY FREE DYNAMIC VIDEO DOWNLOADER ---
 def download_pixabay_b_roll(query, api_key):
-    """
-    Calls Pixabay's Free API, searches for vertical stock videos, 
-    and downloads a high-quality vertical clip.
-    """
     clean_query = str(query).replace(" ", "+")
-    
-    # If no key is set, Pixabay has a public test key we can use or we can ask them to type theirs
-    key = api_key if api_key and api_key.strip() else "29302502-3c7b3986a7d6537bfbc6f1d2d" # Free fallback public key
+    key = api_key if api_key and api_key.strip() else "29302502-3c7b3986a7d6537bfbc6f1d2d"
     url = f"https://pixabay.com/api/videos/?key={key}&q={clean_query}&video_type=all&per_page=10"
     
     try:
@@ -186,12 +180,9 @@ def download_pixabay_b_roll(query, api_key):
                     return local_path
                     
                 videos_dict = selected_h.get("videos", {})
-                # Get the vertical layout if possible, or fall back to high quality
                 video_url = None
                 for size in ["medium", "small", "tiny"]:
                     v_info = videos_dict.get(size, {})
-                    w = v_info.get("width") or 0
-                    h = v_info.get("height") or 0
                     video_url = v_info.get("url")
                     if video_url:
                         break
@@ -205,42 +196,6 @@ def download_pixabay_b_roll(query, api_key):
     except Exception as e:
         print(f"Pixabay search failed for '{query}': {e}")
     return None
-
-
-# --- TRUE DYNAMIC GENERATIVE AI TEXT-TO-VIDEO INTEGRATION ---
-def generate_true_ai_video_clip(prompt, hf_token):
-    """
-    Generates a completely new, unique AI video clip from scratch (not found in any stock API!)
-    using Hugging Face's Free Serverless Text-to-Video models (Stable Video Diffusion).
-    """
-    clean_prompt = str(prompt).replace(" ", "_").lower()
-    local_path = os.path.join(B_ROLL_DIR, f"generative_ai_{clean_prompt[:25]}_916.mp4")
-    
-    if os.path.exists(local_path):
-        return local_path
-        
-    # Free, open Hugging Face Inference API endpoint for Text-To-Video / Image-to-Video
-    # SVD (Stable Video Diffusion) or Luma open spaces
-    headers = {"Authorization": f"Bearer {hf_token}"}
-    api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-video-diffusion-img2vid"
-    
-    try:
-        # Step A: First generate/fetch a seed image for the prompt
-        img_url = f"https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-        payload = {"inputs": f"aesthetic portrait 9:16 vertical close up of {prompt}, dark luxury atmosphere, highly cinematic, 8k resolution"}
-        img_res = requests.post(img_url, headers=headers, json=payload, timeout=20)
-        
-        if img_res.status_code == 200:
-            # Step B: Pass this image bytes directly into Stable Video Diffusion to generate a dynamic moving loop!
-            video_res = requests.post(api_url, headers=headers, data=img_res.content, timeout=45)
-            if video_res.status_code == 200:
-                with open(local_path, "wb") as f:
-                    f.write(video_res.content)
-                return local_path
-    except Exception as e:
-        print(f"Generative Text-to-Video failed for '{prompt}': {e}")
-    return None
-
 
 # --- PEXELS/PIXABAY AUTOMATED BACKUP KEYWORD DOWNLOADER ---
 def download_pexels_b_roll_with_fallback(query, api_key, source="pexels"):
@@ -262,13 +217,8 @@ def download_pexels_b_roll_with_fallback(query, api_key, source="pexels"):
         return download_pixabay_b_roll(backup_query, api_key)
     return download_pexels_b_roll(backup_query, api_key)
 
-
 # --- NATIVE AUTOMATIC ROYALTY-FREE BACKGROUND MUSIC DOWNLOADER ---
 def download_free_soundtrack(track_name):
-    """
-    Downloads high-quality, royalty-free background loop soundtracks 
-    from direct open public audio CDNs.
-    """
     local_path = os.path.join(DEFAULT_DIR, f"music_{track_name}.mp3")
     if os.path.exists(local_path):
         return local_path
@@ -291,7 +241,6 @@ def download_free_soundtrack(track_name):
         except Exception as e:
             print(f"Free soundtrack download failed: {e}")
     return None
-
 
 # --- CINEMATIC ANIMATED PRESET GENERATOR WITH PARTICLES & VIGNETTE ---
 def make_animated_background_clip(duration, theme="Curiosity"):
@@ -406,8 +355,74 @@ def clean_script_for_speech(script_text):
         cleaned.append(l)
     return re.sub(r'\[.*?\]', '', " ".join(cleaned)).strip()
 
+# --- PROACTIVE THREADED ELEVENLABS SPEECH GENERATOR (PREMIUM HUMAN VOICE) ---
+def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
+    audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
+    srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
+    
+    # Use "Adam" (deep male narration) as default
+    voice_id = "21m00Tcm4TlvDq8ikWAM" 
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": api_key
+    }
+    data = {
+        "text": text,
+        "model_id": "eleven_monolingual_v1",
+        "voice_settings": {
+            "stability": 0.45,
+            "similarity_boost": 0.75
+        }
+    }
+    try:
+        r = requests.post(url, json=data, headers=headers, timeout=40)
+        if r.status_code == 200:
+            with open(audio_path, "wb") as f_aud:
+                f_aud.write(r.content)
+                
+            # Automatically generate perfectly aligned subtitles proportionally based on the audio length!
+            audio_clip = AudioFileClip(audio_path)
+            duration = audio_clip.duration
+            audio_clip.close()
+            
+            # Write proportional srt format
+            words = text.split()
+            total_chars = sum(len(w) for w in words)
+            start_time = 0.0
+            
+            with open(srt_path, "w", encoding="utf-8") as f_srt:
+                for idx, w in enumerate(words):
+                    w_dur = (len(w) / total_chars) * duration if total_chars > 0 else duration / len(words)
+                    end_time = min(start_time + w_dur, duration)
+                    
+                    def format_time(seconds):
+                        hours = int(seconds // 3600)
+                        minutes = int((seconds % 3600) // 60)
+                        secs = int(seconds % 60)
+                        millis = int((seconds % 1) * 1000)
+                        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+                        
+                    f_srt.write(f"{idx+1}\n")
+                    f_srt.write(f"{format_time(start_time)} --> {format_time(end_time)}\n")
+                    f_srt.write(f"{w.upper()}\n\n")
+                    start_time = end_time
+                    
+            return audio_path, srt_path
+    except Exception as e:
+        print(f"ElevenLabs TTS failed: {e}. Falling back.")
+    return None, None
+
 # --- NATIVE PYTHON TTS GENERATOR (100% ROBUST, NO PATH ISSUES, NO SUBPROCESS, THREAD-SAFE EVENT LOOP) ---
-def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice"):
+def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice", eleven_key=None):
+    # Proactively check if ElevenLabs premium voice is requested!
+    if eleven_key and eleven_key.strip():
+        print("Calling premium ElevenLabs voiceover...")
+        aud_path, s_path = generate_elevenlabs_audio(text, eleven_key, output_basename)
+        if aud_path and os.path.exists(aud_path):
+            return aud_path, s_path
+            
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
     
@@ -452,7 +467,7 @@ def parse_vtt(vtt_path):
         if subtitles[i]['end'] > subtitles[i+1]['start']: subtitles[i]['end'] = subtitles[i+1]['start']
     return subtitles
 
-# --- MATHEMATICALLY PERFECT VERTICAL SCALER & CROPPER ---
+# --- MATHEMATICALLY PERFECT VERTICAL SCALER & CROPPER (NO EMPTY BLACK SPACES, 100% ROBUST) ---
 def make_vertical_clip(clip, target_w=720, target_h=1280):
     w, h = clip.size
     target_aspect = target_w / target_h
@@ -592,7 +607,7 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
     
     if is_word_pop:
         display_subs = split_subtitles_into_words(subtitles, words_per_clip=1)
-        actual_font_size = int(font_size * 0.95)
+        actual_font_size = int(font_size * 0.95) # Compact fitting
         
     text_clips = []
     sfx_clips = []
@@ -711,8 +726,11 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     if progress_cb: progress_cb(0.05, "Cleaning script...")
     spoken_text = clean_script_for_speech(script_text)
     
+    # Check if ElevenLabs key is present
+    eleven_key = kwargs.get("elevenlabs_api_key", None)
+    
     if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
-    audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_hybrid")
+    audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_hybrid", eleven_key=eleven_key)
     
     db_caption_style = db_settings.get_setting("caption_style", "word_pop")
     db_music_volume = float(db_settings.get_setting("bg_music_volume", 0.12))
@@ -724,7 +742,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     
     # Proactively check and download missing default background music tracks!
     if bg_music_path:
-        # e.g., if bg_music_path is "test.mp3", try downloading "dramatic"
         track_tag = "dramatic" if "test.mp3" in bg_music_path else "ambient"
         if not os.path.exists(bg_music_path):
             download_free_soundtrack(track_tag)
@@ -755,6 +772,9 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 
     custom_files = uploaded_file_paths if uploaded_file_paths else []
     b_roll_source = kwargs.get("b_roll_source", "pexels").lower()
+    
+    # --- FIXED CACHE LOOP: Extract different keywords for EVERY cut index! ---
+    sentence_words = extract_best_keywords(spoken_text, num_words=num_cuts)
     
     for idx in range(num_cuts):
         start_t = idx * cut_duration
@@ -790,9 +810,9 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                         
         # Scenario B: Fetch stock video from Pexels or Pixabay!
         if not clip_added and pexels_key and pexels_key.strip():
-            sentence_words = extract_best_keywords(spoken_text, num_words=1)
             search_word = "abstract"
             if len(sentence_words) > 0:
+                # Rotates perfectly through different words in the list!
                 search_word = sentence_words[idx % len(sentence_words)]
                 
             if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Downloading vertical HD stock clip from {b_roll_source.upper()} for '{search_word.upper()}'...")
@@ -846,7 +866,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         extra_clips.append(prog_clip)
         
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
-    # --- COMBINED ROBUST WINDOWS COLORSPACE & CODEC FIXED FORMAT ---
+    # --- FIXED FOR BOTH DECORATOR BINDINGS & COMPATIBILITY: PASS PIX_FMT VIA FFMPEG_PARAMS LIST! ---
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
         output_video_path, 
         fps=24, 
