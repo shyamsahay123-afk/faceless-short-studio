@@ -355,13 +355,13 @@ def clean_script_for_speech(script_text):
         cleaned.append(l)
     return re.sub(r'\[.*?\]', '', " ".join(cleaned)).strip()
 
-# --- PROACTIVE THREADED ELEVENLABS SPEECH GENERATOR (PREMIUM HUMAN VOICE) ---
+# --- PROACTIVE THREADED ELEVENLABS SPEECH GENERATOR (100% FREE TIER COMPATIBLE VALUE VOICE ID) ---
 def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
     
-    # Use "Adam" (deep male narration) as default
-    voice_id = "21m00Tcm4TlvDq8ikWAM" 
+    # Use "Antoni" (ErXwobaYiN019PkySvjV) - which is 100% Free Tier authorized, smooth and deep male voice!
+    voice_id = "ErXwobaYiN019PkySvjV" 
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
         "Accept": "audio/mpeg",
@@ -382,12 +382,10 @@ def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
             with open(audio_path, "wb") as f_aud:
                 f_aud.write(r.content)
                 
-            # Automatically generate perfectly aligned subtitles proportionally based on the audio length!
             audio_clip = AudioFileClip(audio_path)
             duration = audio_clip.duration
             audio_clip.close()
             
-            # Write proportional srt format
             words = text.split()
             total_chars = sum(len(w) for w in words)
             start_time = 0.0
@@ -416,7 +414,6 @@ def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
 
 # --- NATIVE PYTHON TTS GENERATOR (100% ROBUST, NO PATH ISSUES, NO SUBPROCESS, THREAD-SAFE EVENT LOOP) ---
 def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice", eleven_key=None):
-    # Proactively check if ElevenLabs premium voice is requested!
     if eleven_key and eleven_key.strip():
         print("Calling premium ElevenLabs voiceover...")
         aud_path, s_path = generate_elevenlabs_audio(text, eleven_key, output_basename)
@@ -866,7 +863,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         extra_clips.append(prog_clip)
         
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
-    # --- FIXED FOR BOTH DECORATOR BINDINGS & COMPATIBILITY: PASS PIX_FMT VIA FFMPEG_PARAMS LIST! ---
+    # --- COMBINED ROBUST WINDOWS COLORSPACE & CODEC FIXED FORMAT ---
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
         output_video_path, 
         fps=24, 
