@@ -175,11 +175,8 @@ def fetch_trending_shorts_concepts():
 
 # --- Standalone AI Script Draft Generator (UNCENSORED ROMANCE & RELATIONSHIPS PRESETS) ---
 def auto_generate_script_local(topic, style_choice):
-    # Enforce safe creative boundaries: No CSAM, No terrorism/bombing, No severe crime.
-    # Allow relationship, intimacy, dating, romantic, or raw emotional scripts fully uncensored!
     topic_lower = str(topic).lower()
     if any(k in topic_lower for k in ["bomb", "terror", "explosive", "weapon", "child abuse", "abuse", "murder"]):
-        # Safe fallback block for severe crimes/terrorism
         return "Safety Warning", "[SCRIPT BLOCKED] For personal and algorithmic safety, content involving explosives, terrorism, or severe violence cannot be compiled. Please choose another creative topic!", "safety, warning", "Safety Block"
         
     if "Romance" in style_choice or "Intimacy" in style_choice:
@@ -220,29 +217,38 @@ def auto_generate_script_local(topic, style_choice):
 # ==============================================================================
 db.init_db()
 
+# --- CLEAN API KEY UTILITY (Strips trailing comments like ' - pixa' or ' - 11labs'!) ---
+def clean_api_key(key):
+    if not key:
+        return ""
+    return str(key).split(" - ")[0].split(" ")[0].strip()
+
 # --- Permanent Sidebar API Keys Auto-Savers & GLOWING CONNECTION BADGES ---
 st.sidebar.subheader("🔑 Advanced API Keys")
 
 with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
     # Pexels Key
-    saved_pexels = load_key_from_file("pexels_key.txt")
-    pexels_api_key = st.text_input("Pexels Key (Video)", type="password", value=saved_pexels)
+    saved_pexels = clean_api_key(load_key_from_file("pexels_key.txt"))
+    raw_pexels_api_key = st.text_input("Pexels Key (Video)", type="password", value=saved_pexels)
+    pexels_api_key = clean_api_key(raw_pexels_api_key)
     if pexels_api_key != saved_pexels:
         save_key_to_file("pexels_key.txt", pexels_api_key)
     st.markdown(display_status_badge(test_pexels_key_connection(pexels_api_key)), unsafe_allow_html=True)
     st.write("")
         
     # Pixabay Key
-    saved_pixabay = load_key_from_file("pixabay_key.txt")
-    pixabay_api_key = st.text_input("Pixabay Key (Video)", type="password", value=saved_pixabay)
+    saved_pixabay = clean_api_key(load_key_from_file("pixabay_key.txt"))
+    raw_pixabay_api_key = st.text_input("Pixabay Key (Video)", type="password", value=saved_pixabay)
+    pixabay_api_key = clean_api_key(raw_pixabay_api_key)
     if pixabay_api_key != saved_pixabay:
         save_key_to_file("pixabay_key.txt", pixabay_api_key)
     st.markdown(display_status_badge(test_pixabay_key_connection(pixabay_api_key)), unsafe_allow_html=True)
     st.write("")
         
     # ElevenLabs Key
-    saved_eleven = load_key_from_file("elevenlabs_key.txt")
-    elevenlabs_api_key = st.text_input("ElevenLabs Key (Voice)", type="password", value=saved_eleven)
+    saved_eleven = clean_api_key(load_key_from_file("elevenlabs_key.txt"))
+    raw_elevenlabs_api_key = st.text_input("ElevenLabs Key (Voice)", type="password", value=saved_eleven)
+    elevenlabs_api_key = clean_api_key(raw_elevenlabs_api_key)
     if elevenlabs_api_key != saved_eleven:
         save_key_to_file("elevenlabs_key.txt", elevenlabs_api_key)
     st.markdown(display_status_badge(test_elevenlabs_key_connection(elevenlabs_api_key)), unsafe_allow_html=True)
@@ -372,7 +378,6 @@ b_roll_source_label = col_s4.selectbox("🏞️ Stock B-Roll Source", [
 ])
 b_roll_source_val = "pexels" if "Pexels" in b_roll_source_label else "pixabay"
 
-# Soundtrack auto-selection in background based on Step 2 vibe!
 bg_music_path = "test.mp3" if ("Dramatic" in style_choice or "Urgency" in style_choice) else "backup.mp3"
 show_progress_bar = True
 music_volume = 0.12
