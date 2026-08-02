@@ -130,7 +130,9 @@ def make_animated_background_clip(duration, theme="Curiosity"):
             x = int(p['x_pct'] * width)
             y = int(((p['y_start_pct'] - p['speed'] * t) % 1.0) * height)
             rad = p['size']
+            # Core
             draw.ellipse([x - rad, y - rad, x + rad, y + rad], fill=(orb_color[0], orb_color[1], orb_color[2], p['opacity']))
+            # Soft Glow
             if rad > 3:
                 draw.ellipse([x - rad - 2, y - rad - 2, x + rad + 2, y + rad + 2], fill=(orb_color[0], orb_color[1], orb_color[2], int(p['opacity'] * 0.4)))
         
@@ -473,7 +475,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_compiled.mp4")
     progress_cb = kwargs.get("progress_callback", None)
     
-    if progress_cb: progress_cb(0.05, "Cleaning production script for text-to-speech engine...")
+    if progress_cb: progress_cb(0.05, "Cleaning script...")
     spoken_text = clean_script_for_speech(script_text)
     
     if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
@@ -499,7 +501,16 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     transition_audio_clips = []
     whoosh_path = generate_synthetic_whoosh_sound()
     
+    # Check both parameters and the local pexels_key.txt file to be 100% robust
     pexels_key = kwargs.get("pexels_api_key", None)
+    if not pexels_key or not pexels_key.strip():
+        if os.path.exists("pexels_key.txt"):
+            try:
+                with open("pexels_key.txt", "r", encoding="utf-8") as f:
+                    pexels_key = f.read().strip()
+            except:
+                pass
+                
     custom_files = uploaded_file_paths if uploaded_file_paths else []
     
     for idx in range(num_cuts):
@@ -592,7 +603,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         extra_clips.append(prog_clip)
         
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
-    # --- CRITICAL FIX FOR WINDOWS: FORCE YUV420P PIX FMT TO PREVENT BLANK BLACK VIDEO IN PLAYERS ---
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
         output_video_path, 
         fps=24, 
