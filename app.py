@@ -103,12 +103,57 @@ def save_key_to_file(filename, key):
     except:
         pass
 
+# --- FAST CACHED API CONNECTION STATUS TESTERS ---
+@st.cache_data(ttl=60)
+def test_pexels_key_connection(api_key):
+    if not api_key or not api_key.strip():
+        return "empty"
+    try:
+        r = requests.get("https://api.pexels.com/v1/collections", headers={"Authorization": api_key}, timeout=4)
+        if r.status_code == 200:
+            return "valid"
+        return "invalid"
+    except:
+        return "error"
+
+@st.cache_data(ttl=60)
+def test_pixabay_key_connection(api_key):
+    if not api_key or not api_key.strip():
+        return "empty"
+    url = f"https://pixabay.com/api/?key={api_key}&q=nature&per_page=1"
+    try:
+        r = requests.get(url, timeout=4)
+        if r.status_code == 200:
+            return "valid"
+        return "invalid"
+    except:
+        return "error"
+
+@st.cache_data(ttl=60)
+def test_elevenlabs_key_connection(api_key):
+    if not api_key or not api_key.strip():
+        return "empty"
+    url = "https://api.elevenlabs.io/v1/voices"
+    try:
+        r = requests.get(url, headers={"xi-api-key": api_key}, timeout=4)
+        if r.status_code == 200:
+            return "valid"
+        return "invalid"
+    except:
+        return "error"
+
+def display_status_badge(status):
+    if status == "valid":
+        return "<span style='color: #39FF14; font-weight: bold; font-size: 14px;'>🟢 Connected</span>"
+    elif status == "invalid":
+        return "<span style='color: #FF3B30; font-weight: bold; font-size: 14px;'>🔴 Invalid Key</span>"
+    elif status == "empty":
+        return "<span style='color: #8E8E93; font-size: 14px;'>⚪ Disconnected</span>"
+    else:
+        return "<span style='color: #FF9500; font-size: 14px;'>🟡 Connection Error</span>"
+
 # --- REAL-TIME GOOGLE & YOUTUBE SHORTS TREND BOARD CRAWLER ---
 def fetch_trending_shorts_concepts():
-    """
-    Parses live search trends RSS from Google and automatically rewrites them
-    into highly clickable, viral short-form mindset & psychology concepts.
-    """
     base_trends = [
         "Why the Top 1% Use Dopamine Fasting to Build Unshakeable Focus",
         "The Dark Psychology of the 'Pavlov Effect' (How to brainwash yourself to work)",
@@ -123,29 +168,41 @@ def fetch_trending_shorts_concepts():
             root = ET.fromstring(r.content)
             items = root.findall('.//item/title')
             for idx, item in enumerate(items[:3]):
-                t_text = item.text
-                if t_text:
-                    base_trends.insert(idx, f"Why high-performers study the '{t_text}' focus shift")
+                if item.text: base_trends.insert(idx, f"Why high-performers study the '{item.text}' focus shift")
     except:
         pass
     return list(set(base_trends))[:5]
 
-# --- Standalone AI Script Draft Generator ---
+# --- Standalone AI Script Draft Generator (UNCENSORED ROMANCE & RELATIONSHIPS PRESETS) ---
 def auto_generate_script_local(topic, style_choice):
-    if "Dramatic" in style_choice:
+    # Enforce safe creative boundaries: No CSAM, No terrorism/bombing, No severe crime.
+    # Allow relationship, intimacy, dating, romantic, or raw emotional scripts fully uncensored!
+    topic_lower = str(topic).lower()
+    if any(k in topic_lower for k in ["bomb", "terror", "explosive", "weapon", "child abuse", "abuse", "murder"]):
+        # Safe fallback block for severe crimes/terrorism
+        return "Safety Warning", "[SCRIPT BLOCKED] For personal and algorithmic safety, content involving explosives, terrorism, or severe violence cannot be compiled. Please choose another creative topic!", "safety, warning", "Safety Block"
+        
+    if "Romance" in style_choice or "Intimacy" in style_choice:
+        hook_category = "Romance & Intimacy"
+        trigger_desc = "Connect directly with core emotional desires, chemistry secrets, and deep intimacy loops."
+        hooks = [
+            "The bizarre psychology why people fall head over heels for [Topic]...",
+            "If you want to master deep passionate chemistry with your partner, stop doing this Mistake.",
+            "Studies reveal the raw truth why unshakeable physical intimacy has nothing to do with looks."
+        ]
+    elif "Dramatic" in style_choice:
         hook_category = "Curiosity Gap"
         trigger_desc = "Create an open loop in the first 2 seconds that makes the brain demand closure."
+        hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["99% of people get this entirely wrong. Here is the exact truth about [Topic]."])
     elif "Motivational" in style_choice:
         hook_category = "Identity Signaling"
         trigger_desc = "Make the viewer feel they belong to a higher-status group (smart, disciplined, successful)."
-    elif "High-Alert" in style_choice:
+        hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["Only the top 1% of highly disciplined minds actually do this."])
+    else:
         hook_category = "Loss Aversion"
         trigger_desc = "Highlight what the viewer will lose if they don’t act."
-    else:
-        hook_category = "Emotional Story Hook"
-        trigger_desc = "Start with a 3-second personal micro-story that creates instant emotional connection."
+        hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["Stop wasting your precious time on this mistake before it destroys your goal."])
         
-    hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["99% of people get this entirely wrong. Here is the exact truth about [Topic]."])
     selected_hook = random.choice(hooks)
     custom_hook = selected_hook.replace("[Topic]", topic).replace("[Niche]", topic).replace("[Role/Niche]", "performer").replace("[Role/Goal]", "leader").replace("[Bad Habit/Mistake]", "wasting focus").replace("[Money/Time/Health]", "focus")
     
@@ -159,11 +216,11 @@ def auto_generate_script_local(topic, style_choice):
     return title, full_script, tags, hook_category
 
 # ==============================================================================
-# INITIALIZE DATABASE & LOCAL API AUTOSAVERS
+# DATABASE & SETTINGS INITIALIZATION
 # ==============================================================================
 db.init_db()
 
-# --- Permanent Sidebar API Keys Auto-Savers ---
+# --- Permanent Sidebar API Keys Auto-Savers & GLOWING CONNECTION BADGES ---
 st.sidebar.subheader("🔑 Advanced API Keys")
 
 with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
@@ -172,18 +229,23 @@ with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
     pexels_api_key = st.text_input("Pexels Key (Video)", type="password", value=saved_pexels)
     if pexels_api_key != saved_pexels:
         save_key_to_file("pexels_key.txt", pexels_api_key)
+    st.markdown(display_status_badge(test_pexels_key_connection(pexels_api_key)), unsafe_allow_html=True)
+    st.write("")
         
     # Pixabay Key
     saved_pixabay = load_key_from_file("pixabay_key.txt")
     pixabay_api_key = st.text_input("Pixabay Key (Video)", type="password", value=saved_pixabay)
     if pixabay_api_key != saved_pixabay:
         save_key_to_file("pixabay_key.txt", pixabay_api_key)
+    st.markdown(display_status_badge(test_pixabay_key_connection(pixabay_api_key)), unsafe_allow_html=True)
+    st.write("")
         
     # ElevenLabs Key
     saved_eleven = load_key_from_file("elevenlabs_key.txt")
     elevenlabs_api_key = st.text_input("ElevenLabs Key (Voice)", type="password", value=saved_eleven)
     if elevenlabs_api_key != saved_eleven:
         save_key_to_file("elevenlabs_key.txt", elevenlabs_api_key)
+    st.markdown(display_status_badge(test_elevenlabs_key_connection(elevenlabs_api_key)), unsafe_allow_html=True)
 
 st.sidebar.divider()
 all_shorts = db.get_all_shorts()
@@ -238,7 +300,8 @@ with col_p2:
         "Dark & Dramatic (Mysterious music, purple pulsing loops fallback)",
         "Motivational & Elite (Inspirational music, emerald glowing fallback)",
         "High-Alert Urgency (Dramatic tense music, crimson alarm fallback)",
-        "Emotional Story (Calm ambient music, royal blue fallback)"
+        "Emotional Story (Calm ambient music, royal blue fallback)",
+        "❤️ Romance & Intimacy (Calm beautiful music, deep rose fallback)"
     ])
 
 # Draft Script Button (Triggers the Interactive Editor Phase!)
@@ -263,7 +326,7 @@ if 'active_script' in st.session_state:
     
     # Analyze B-Roll search keywords in real-time!
     spoken_clean = video.clean_script_for_speech(edited_script)
-    keywords_list = video.extract_best_keywords(spoken_clean, num_words=6)
+    keywords_list = video.extract_best_keywords(spoken_clean, num_words=12)
     
     st.markdown("**🔍 Visual Stock B-Roll Search Prompts:**")
     st.write(f"The AI will search and download beautiful vertical video loops for these terms: `{', '.join(keywords_list)}`")
@@ -309,6 +372,7 @@ b_roll_source_label = col_s4.selectbox("🏞️ Stock B-Roll Source", [
 ])
 b_roll_source_val = "pexels" if "Pexels" in b_roll_source_label else "pixabay"
 
+# Soundtrack auto-selection in background based on Step 2 vibe!
 bg_music_path = "test.mp3" if ("Dramatic" in style_choice or "Urgency" in style_choice) else "backup.mp3"
 show_progress_bar = True
 music_volume = 0.12
@@ -337,6 +401,8 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
         st.error("⚠️ Please click '🤖 STEP 1: DRAFT SCRIPT & ANALYZE KEYWORDS' first to review and edit your script before compiling!")
     elif not active_video_key or not active_video_key.strip():
         st.error(f"❌ {b_roll_source_label} Key is missing! Please configure your {b_roll_source_label} Key in the left sidebar under Advanced API Keys first!")
+    elif st.session_state['active_title'] == "Safety Warning":
+        st.error("❌ Cannot compile: Please select a non-restricted creative topic in Step 2!")
     else:
         # Load edited variables from state
         preset_title = st.session_state['active_title']
