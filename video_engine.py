@@ -1,8 +1,10 @@
 import os
 import re
+import asyncio
 import subprocess
 import numpy as np
 import requests
+import edge_tts
 import db_manager as db_settings
 from moviepy import (
     VideoClip, ImageClip, VideoFileClip, AudioFileClip, CompositeVideoClip, TextClip, concatenate_videoclips, CompositeAudioClip, concatenate_audioclips
@@ -194,21 +196,42 @@ def clean_script_for_speech(script_text):
         cleaned.append(l)
     return re.sub(r'\[.*?\]', '', " ".join(cleaned)).strip()
 
-# --- TTS GENERATOR ---
+# --- NATIVE PYTHON TTS GENERATOR (100% ROBUST, NO PATH ISSUES, NO SUBPROCESS) ---
 def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice"):
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
-    vtt_path = os.path.join(AUDIO_DIR, f"{output_basename}.vtt")
-    cmd = ["edge-tts", "--voice", voice_name, "--text", text, "--write-media", audio_path, "--write-subtitles", vtt_path]
+    srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
+    
+    async def amain():
+        communicate = edge_tts.Communicate(text, voice_name)
+        submaker = edge_tts.SubMaker()
+        with open(audio_path, "wb") as f_aud:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    f_aud.write(chunk["data"])
+                elif chunk["type"] == "WordBoundary":
+                    submaker.feed(chunk)
+                    
+        with open(srt_path, "w", encoding="utf-8") as f_sub:
+            f_sub.write(submaker.get_srt())
+            
     try:
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return audio_path, vtt_path
+        # Run async in independent thread event loop to prevent Streamlit async conflicts
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(amain())
+        loop.close()
+        return audio_path, srt_path
     except Exception as e:
-        print(f"edge-tts failed: {e}. Falling back to gTTS.")
+        print(f"Native edge-tts failed: {e}. Falling back to gTTS.")
         from gtts import gTTS
-        gTTS(text=text, lang='en').save(audio_path)
-        return audio_path, None
+        try:
+            gTTS(text=text, lang='en').save(audio_path)
+            return audio_path, None
+        except Exception as ge:
+            print(f"gTTS fallback failed: {ge}")
+            return None, None
 
-# --- WEB VTT PARSER ---
+# --- WEB VTT / SRT PARSER (FULLY HYBRID) ---
 def parse_vtt(vtt_path):
     if not vtt_path or not os.path.exists(vtt_path): return []
     with open(vtt_path, 'r', encoding='utf-8') as f:
@@ -444,22 +467,15 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 # 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
 # ==============================================================================
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
-    """
-    The Ultimate Video Compiler.
-    Handles 100% Fully AI, 100% Custom Files, or Hybrid (Custom Files + Auto AI Stock downloads).
-    Will NEVER fail - uses abstract particle background loop as a guaranteed fallback!
-    """
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_compiled.mp4")
     progress_cb = kwargs.get("progress_callback", None)
     
-    # 1. Speech Generation & Subtitle timing
     if progress_cb: progress_cb(0.05, "Cleaning production script for text-to-speech engine...")
     spoken_text = clean_script_for_speech(script_text)
     
     if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
     audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_hybrid")
     
-    # Load settings from Database settings table
     db_caption_style = db_settings.get_setting("caption_style", "word_pop")
     db_music_volume = float(db_settings.get_setting("bg_music_volume", 0.12))
     db_font_size = int(db_settings.get_setting("font_size", 55))
@@ -472,7 +488,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
     duration = voice_audio.duration
     
-    # 2. Slice Visual Track segments (Fast 2.0s transitions!)
     cut_duration = 2.0
     num_cuts = int(np.ceil(duration / cut_duration))
     
@@ -482,8 +497,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     whoosh_path = generate_synthetic_whoosh_sound()
     
     pexels_key = kwargs.get("pexels_api_key", None)
-    
-    # Handle optional uploaded files
     custom_files = uploaded_file_paths if uploaded_file_paths else []
     
     for idx in range(num_cuts):
@@ -501,12 +514,10 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             if os.path.exists(file_path):
                 if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Slicing and zoom-formatting your uploaded asset {idx+1}...")
                 if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    # Apply Ken burns pan-zoom to images
                     v_clip = make_ken_burns_clip(file_path, clip_dur).with_start(start_t)
                     visual_clips.append(v_clip)
                     clip_added = True
                 elif file_path.lower().endswith(('.mp4', '.mov')):
-                    # Subclip video segment
                     try:
                         raw_v = VideoFileClip(file_path)
                         sub_start = 0.0
@@ -520,13 +531,11 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                     except Exception as e:
                         print(f"Failed loading uploaded clip: {e}")
                         
-        # Scenario B: Fetch stock video from Pexels! (If no custom files left, or completely Faceless AI Video)
+        # Scenario B: Fetch stock video from Pexels!
         if not clip_added and pexels_key and pexels_key.strip():
-            # Find keyword spoken at this timestamp
             sentence_words = extract_best_keywords(spoken_text, num_words=1)
             search_word = "abstract"
             if len(sentence_words) > 0:
-                # Rotate keywords to keep scenes completely unique!
                 search_word = sentence_words[idx % len(sentence_words)]
                 
             if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Downloading vertical HD stock clip from Pexels for '{search_word.upper()}'...")
@@ -545,10 +554,9 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 except Exception as e:
                     print(f"Failed loading downloaded stock: {e}")
                     
-        # Scenario C: Fallback to animated particles! (Zero copyright risks, guaranteed fail-safe)
+        # Scenario C: Fallback to animated particles!
         if not clip_added:
             if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, "Generating procedural 24fps glowing background loop...")
-            # Pick a theme matching our keywords
             theme_choice = "Curiosity"
             if "success" in spoken_text.lower(): theme_choice = "Success"
             elif "warning" in spoken_text.lower() or "mistake" in spoken_text.lower(): theme_choice = "Urgency"
@@ -557,7 +565,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             p_clip = make_vertical_clip(p_clip)
             visual_clips.append(p_clip)
             
-        # On every transition cut, overlay our custom cinematic whoosh sound!
         if idx > 0:
             try:
                 whoosh_clip = AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume)
@@ -565,42 +572,35 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             except:
                 pass
                 
-    # 3. Composite visual tracks
     bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
     
-    # 4. Generate subtitle overlays & click sfx ticks
     if progress_cb: progress_cb(0.80, "Slicing subtitle timings, emojifying captions, and mapping Neon highlights...")
     caption_style = kwargs.get("caption_style", db_caption_style)
     text_clips, sfx_clips = build_subtitle_and_sfx_clips(parse_vtt(vtt_path), color=font_color, caption_style=caption_style, font_size=db_font_size)
     
-    # 5. Compile final audio
-    all_audio_tracks = [mixed_audio] + sfx_clips + transition_audio_clips
-    final_mixed_audio = CompositeAudioClip(all_audio_tracks)
-    
-    bg_clip = bg_clip.with_audio(final_mixed_audio)
+    if sfx_clips:
+        mixed_audio = CompositeAudioClip([mixed_audio] + sfx_clips)
+        
+    bg_clip = bg_clip.with_audio(mixed_audio)
     
     extra_clips = []
     if kwargs.get("show_progress_bar", True):
         prog_clip = make_progress_bar_clip(duration)
         extra_clips.append(prog_clip)
         
-    # 6. Encode video file
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(output_video_path, fps=24, codec="libx264", audio_codec="aac", preset="fast", logger=None)
     
-    # 7. Safe cleanup
-    if progress_cb: progress_cb(0.98, "Safely locking down video assets and updating DB indices...")
-    try:
-        final_mixed_audio.close()
+    if progress_cb: progress_cb(0.98, "Releasing local system file locks and saving database state...")
+    try: 
         mixed_audio.close()
-        voice_audio.close()
+        voice_audio.close() 
         bg_clip.close()
-        for vc in visual_clips: vc.close()
         for tc in text_clips: tc.close()
         for ec in extra_clips: ec.close()
         for sc in sfx_clips: sc.close()
         for wc in transition_audio_clips: wc.close()
-    except:
+    except: 
         pass
         
     if progress_cb: progress_cb(1.00, "Render complete!")
