@@ -242,6 +242,36 @@ def download_free_soundtrack(track_name):
             print(f"Free soundtrack download failed: {e}")
     return None
 
+# --- NATIVE AUTOMATIC ROYALTY-FREE MEME SOUND EFFECTS DOWNLOADER ---
+def download_free_meme_sfx(sfx_name):
+    """
+    Downloads classic, high-pacing viral internet meme sound effects (record scratch, wow, bass drop)
+    from direct open public archive.org CDNs.
+    """
+    name_clean = str(sfx_name).lower().replace(" ", "_")
+    local_path = os.path.join(DEFAULT_DIR, f"meme_{name_clean}.mp3")
+    if os.path.exists(local_path):
+        return local_path
+        
+    urls = {
+        "record_scratch": "https://archive.org/download/RecordScratchSoundEffectPlotTwistSound/Record%20Scratch%20Sound%20Effect%21%20%28%20Plot%20Twist%20Sound%29.mp3",
+        "anime_wow": "https://archive.org/download/wow-sound-effect_202012/wow.mp3",
+        "bass_drop": "https://archive.org/download/bass-drop_202108/bass-drop.mp3"
+    }
+    
+    url = urls.get(name_clean)
+    if url:
+        try:
+            print(f"Downloading viral meme sound effect: '{sfx_name.upper()}'...")
+            r = requests.get(url, timeout=30)
+            if r.status_code == 200:
+                with open(local_path, "wb") as f:
+                    f.write(r.content)
+                return local_path
+        except Exception as e:
+            print(f"Meme SFX download failed: {e}")
+    return None
+
 # --- CINEMATIC ANIMATED PRESET GENERATOR WITH PARTICLES & VIGNETTE ---
 def make_animated_background_clip(duration, theme="Curiosity"):
     width, height = 720, 1280
@@ -360,6 +390,7 @@ def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
     
+    # Use "Antoni" (ErXwobaYiN019PkySvjV) - which is 100% Free Tier authorized, smooth and deep male voice!
     voice_id = "ErXwobaYiN019PkySvjV" 
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
@@ -714,6 +745,7 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 # 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
 # ==============================================================================
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
+    # --- PROACTIVE WINDOWS FILE LOCK AVOIDANCE (WinError 32): USE TIMESTAMPED FILENAMES ---
     timestamp = int(time.time())
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_{timestamp}.mp4")
     
@@ -774,6 +806,12 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     
     # --- FIXED CACHE LOOP: Extract different keywords for EVERY cut index! ---
     sentence_words = extract_best_keywords(spoken_text, num_words=num_cuts)
+    
+    # --- PROACTIVE RETENTION UPGRADE: DOWNLOAD MEME SFX LOOP ---
+    meme_sfx_name = kwargs.get("meme_sfx_name", None)
+    meme_sfx_path = None
+    if meme_sfx_name and meme_sfx_name.lower() != "none":
+        meme_sfx_path = download_free_meme_sfx(meme_sfx_name)
     
     for idx in range(num_cuts):
         start_t = idx * cut_duration
@@ -844,6 +882,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             p_clip = make_vertical_clip(p_clip)
             visual_clips.append(p_clip)
             
+        # On every visual cut, layer a cinematic rising whoosh transition sound effect
         if idx > 0:
             try:
                 whoosh_clip = AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume)
@@ -851,6 +890,15 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             except:
                 pass
                 
+    # --- PROACTIVE ATTENTION INJECTOR: OVERLAY MEME SFX EXACTLY ON THE FIRST TRANSITION CUT! ---
+    if meme_sfx_path and os.path.exists(meme_sfx_path):
+        try:
+            # Plays exactly at Second 2.0 or 1.3 (the first transition cut) to snap scrolling focus!
+            sfx_clip = AudioFileClip(meme_sfx_path).with_start(cut_duration).with_volume_scaled(0.18)
+            transition_audio_clips.append(sfx_clip)
+        except Exception as e:
+            print(f"Failed mixing meme SFX: {e}")
+            
     bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
     
     if progress_cb: progress_cb(0.80, "Slicing subtitle timings, emojifying captions, and mapping Neon highlights...")

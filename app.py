@@ -383,7 +383,7 @@ st.divider()
 # STEP 3: VOCAL & STYLING SETTINGS
 # ------------------------------------------------------------------------------
 st.subheader("🎛️ Step 3: Vocal & Styling Settings")
-col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
 
 ai_voice_label = col_s1.selectbox("🔊 Narrator Voice", ["Elite Deep Male", "Energetic Crisp Male", "Warm Professional Female", "Elegant British Female"])
 voice_mapping = {"Elite Deep Male": "en-US-ChristopherNeural", "Energetic Crisp Male": "en-US-GuyNeural", "Warm Professional Female": "en-US-AriaNeural", "Elegant British Female": "en-GB-SoniaNeural"}
@@ -414,6 +414,13 @@ b_roll_source_label = col_s4.selectbox("🏞️ Stock B-Roll Source", [
     "Pixabay (Free)"
 ])
 b_roll_source_val = "pexels" if "Pexels" in b_roll_source_label else "pixabay"
+
+meme_sfx_label = col_s5.selectbox("🔥 Meme Sound", [
+    "None",
+    "Record Scratch",
+    "Anime Wow",
+    "Bass Drop"
+])
 
 bg_music_path = "test.mp3" if ("Dramatic" in style_choice or "Urgency" in style_choice) else "backup.mp3"
 show_progress_bar = True
@@ -495,12 +502,14 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 bg_music_path=bg_music_path,
                 bg_music_volume=music_volume,
                 show_progress_bar=show_progress_bar,
-                pexels_api_key=pexels_api_key,
+                pexels_api_key=active_video_key,
+                elevenlabs_api_key=elevenlabs_api_key,
                 progress_callback=render_progress,
                 caption_style=caption_style_code,
                 cut_duration=cut_duration_val,
                 b_roll_source=b_roll_source_val,
-                custom_scenarios=scenarios_input
+                custom_scenarios=scenarios_input,
+                meme_sfx_name=meme_sfx_label
             )
             
             db.update_short_video(short_id, v_path, a_path, vtt_path, status='created')
