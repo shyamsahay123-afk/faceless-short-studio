@@ -104,6 +104,13 @@ def save_key_to_file(filename, key):
     except:
         pass
 
+# --- CLEAN API KEY UTILITY ---
+def clean_api_key(key):
+    if not key:
+        return ""
+    # Auto-strip any trailing spaces, hyphens, or comments (like " - pixa")
+    return str(key).split(" - ")[0].split(" ")[0].strip()
+
 # --- FAST CACHED API CONNECTION STATUS TESTERS ---
 @st.cache_data(ttl=60)
 def test_pexels_key_connection(api_key):
