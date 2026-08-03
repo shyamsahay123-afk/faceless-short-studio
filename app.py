@@ -104,7 +104,7 @@ def save_key_to_file(filename, key):
     except:
         pass
 
-# --- FAST CACHED API CONNECTION STATUS TESTERS (UPGRADED WITH TIMEOUTS & CODES) ---
+# --- FAST CACHED API CONNECTION STATUS TESTERS ---
 @st.cache_data(ttl=60)
 def test_pexels_key_connection(api_key):
     if not api_key or not api_key.strip():
@@ -121,7 +121,6 @@ def test_pexels_key_connection(api_key):
 def test_pixabay_key_connection(api_key):
     if not api_key or not api_key.strip():
         return "empty"
-    # Query Pixabay Video API with valid per_page (must be >= 3!)
     url = f"https://pixabay.com/api/videos/?key={api_key}&q=nature&per_page=3"
     try:
         r = requests.get(url, timeout=10)
@@ -135,8 +134,6 @@ def test_pixabay_key_connection(api_key):
 def test_elevenlabs_key_connection(api_key):
     if not api_key or not api_key.strip():
         return "empty"
-    # Call ElevenLabs text-to-speech with a light post test. 
-    # If the key is valid, it returns 200 or 402 (paid plan required for custom voice, but key is authenticated!)
     url = "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM"
     try:
         r = requests.post(url, headers={"xi-api-key": api_key}, json={"text": "."}, timeout=10)
@@ -201,24 +198,53 @@ Here is the raw relationship shift:
     elif "Dramatic" in style_choice:
         hook_category = "Curiosity Gap"
         trigger_desc = "Create an open loop in the first 2 seconds that makes the brain demand closure."
-        hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["99% of people get this entirely wrong. Here is the exact truth about [Topic]."])
-        value_delivery = random.choice(psych.VALUE_DELIVERY_TEMPLATES)
+        hooks = [
+            "99% of people get this entirely wrong. Here is the exact truth about [Topic].",
+            "What is the bizarre secret to unshakeable consistency? The answer will shock you.",
+            "Why do intelligent people struggle to stay consistent? It has nothing to do with willpower."
+        ]
+        value_delivery = """[VALUE DELIVERY]
+Here is the exact neuroscience breakdown:
+1. Cognitive Overload: Intelligent brains analyze too many variables, causing micro-friction.
+2. The Action Boundary: To stop overthinking, establish a strict 20-minute daily execution sprint.
+3. Habit Automation: Automate your morning ritual so your prefrontal cortex never has to choose. Eliminate cognitive friction to build unshakeable momentum."""
         cta = "Save this video so you don't lose it + Follow for daily elite frameworks 📈"
+        
     elif "Motivational" in style_choice:
         hook_category = "Identity Signaling"
         trigger_desc = "Make the viewer feel they belong to a higher-status group (smart, disciplined, successful)."
-        hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["Only the top 1% of highly disciplined minds actually do this."])
-        value_delivery = random.choice(psych.VALUE_DELIVERY_TEMPLATES)
+        hooks = [
+            "Only the top 1% of highly disciplined minds actually do this.",
+            "If you want to operate like an elite performer, stop acting like everybody else.",
+            "Why do intelligent minds fail to execute? Because they rely on motivation, not discipline."
+        ]
+        value_delivery = """[VALUE DELIVERY]
+Here is the elite performance strategy:
+1. Mindset Shift: Drop the amateur reliance on motivation.
+2. The 20-Minute Focus Rule: Lock yourself in a room with zero devices and write.
+3. Deep Execution Sprint: Lock in for 90 minutes of deep work every morning before scrolling."""
         cta = "Drop a 🔥 in the comments if you are executing this today!"
+        
     else:
         hook_category = "Loss Aversion"
         trigger_desc = "Highlight what the viewer will lose if they don’t act."
-        hooks = psych.TRIGGER_HOOK_TEMPLATES.get(hook_category, ["Stop wasting your precious time on this mistake before it destroys your goal."])
-        value_delivery = random.choice(psych.VALUE_DELIVERY_TEMPLATES)
+        hooks = [
+            "Stop wasting your precious time on this mistake before it destroys your goal.",
+            "The biggest mistake stealing your success and focus every single day.",
+            "If you continue to scroll mindlessly, you are practically throwing away your future."
+        ]
+        value_delivery = """[VALUE DELIVERY]
+Stop throwing away your focus:
+1. Friction Point: Your phone is a slot machine stealing your attention span.
+2. The dopamine drain: Every cheap scroll reduces your brain's capacity for deep work.
+3. The instant shift: Move your phone to another room before you start your morning routine."""
         cta = "Save this video so you don't lose it + Follow for daily elite frameworks 📈"
         
     selected_hook = random.choice(hooks)
     custom_hook = selected_hook.replace("[Topic]", topic).replace("[Niche]", topic).replace("[Role/Niche]", "performer").replace("[Role/Goal]", "leader").replace("[Bad Habit/Mistake]", "wasting focus").replace("[Money/Time/Health]", "focus")
+    
+    # Clean up any leftover raw template tags in fallback selections
+    custom_hook = custom_hook.replace("[X]", "intelligence").replace("[Y]", "consistency").replace("[Key Strategy]", "Habit Automation")
     
     full_script = f"""[0-3 sec HOOK]\n{custom_hook}\n\n[PSYCHOLOGY TRIGGER: {hook_category}]\n{trigger_desc}\n\n{value_delivery}\n\n[ENGAGEMENT CTA]\n{cta}"""
     title = f"{custom_hook[:45]}..." if len(custom_hook) > 45 else custom_hook
@@ -230,12 +256,6 @@ Here is the raw relationship shift:
 # DATABASE & SETTINGS INITIALIZATION
 # ==============================================================================
 db.init_db()
-
-# --- CLEAN API KEY UTILITY ---
-def clean_api_key(key):
-    if not key:
-        return ""
-    return str(key).split(" - ")[0].split(" ")[0].strip()
 
 # --- Permanent Sidebar API Keys Auto-Savers & GLOWING CONNECTION BADGES ---
 st.sidebar.subheader("🔑 Advanced API Keys")
