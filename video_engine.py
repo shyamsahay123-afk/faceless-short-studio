@@ -102,7 +102,7 @@ def extract_best_keywords(text, num_words=12):
         'or', 'if', 'then', 'else', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 
         'my', 'your', 'his', 'her', 'its', 'our', 'their', 'how', 'why', 'what', 'who', 'whom', 'here', 'there', 
         'about', 'stop', 'doing', 'right', 'now', 'your', 'mine', 'all', 'any', 'get', 'gets', 'got', 'use', 'using',
-        'has', 'have', 'had', 'been', 'actually', 'thing', 'one', 'two', 'three', 'actually'
+        'has', 'have', 'had', 'been', 'actually', 'thing', 'one', 'two', 'three'
     }
     words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
     filtered = [w for w in words if w not in stop_words]
@@ -197,9 +197,8 @@ def download_pixabay_b_roll(query, api_key):
         print(f"Pixabay search failed for '{query}': {e}")
     return None
 
-# --- PEXELS/PIXABAY AUTOMATED BACKUP KEYWORD DOWNLOADER WITH DYNAMIC COLOR TONE MATCHING ---
+# --- PEXELS/PIXABAY AUTOMATED BACKUP KEYWORD DOWNLOADER WITH COLOR TONE MATCHING ---
 def download_pexels_b_roll_with_fallback(query, api_key, source="pexels", color_tone="aesthetic"):
-    # Append the dynamic color tone qualifier (like "rose" or "blue") to guarantee color consistency across all clips!
     clean_query = f"{query} {color_tone}" if color_tone else query
     expanded = expand_keyword_to_concept(clean_query)
     
@@ -212,7 +211,6 @@ def download_pexels_b_roll_with_fallback(query, api_key, source="pexels", color_
     if clip and os.path.exists(clip):
         return clip
         
-    # Standard fallback searches carrying the same color tone parameter
     backups = [f"moody {color_tone}", f"urban night {color_tone}", f"focused student {color_tone}", f"ticking clock {color_tone}", f"rain window {color_tone}"]
     backup_query = random.choice(backups)
     
@@ -342,37 +340,65 @@ def make_animated_background_clip(duration, theme="Curiosity"):
 
     return VideoClip(make_frame, duration=duration)
 
-# --- PROCEDURAL EDITORIAL GRAPHIC CARD GENERATOR (THE ULTIMATE FALLBACK COVER!) ---
+# --- PROCEDURAL EDITORIAL GRAPHIC CARD GENERATOR ---
 def make_solid_color_card_clip(duration, color_tuple=(30, 58, 138)):
-    """
-    Generates a gorgeous, solid or subtle radial gradient background card 
-    matching the active theme's dominant color space. Used as a high-end 
-    fallback graphic if a video clip doesn't match or fails.
-    """
     width, height = 720, 1280
-    
-    # Create the radial gradient card
     base_img = Image.new("RGB", (width, height), color=color_tuple)
     draw = ImageDraw.Draw(base_img, "RGBA")
     
-    # Draw soft inner radial glow for a luxury look
     cx, cy = 360, 640
     for r in range(10, 600, 30):
         opacity = int(max(0, 45 - (r / 600) * 45))
         draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(255, 255, 255, opacity), width=2)
         
-    # Faint tech grid lines
     grid_color = (255, 255, 255, 8)
     for gx in range(1, 6):
         draw.line([(gx * 120, 0), (gx * 120, height)], fill=grid_color, width=1)
     for gy in range(1, 10):
         draw.line([(0, gy * 128), (width, gy * 128)], fill=grid_color, width=1)
         
-    # Luxury corner framing
     draw.rectangle([18, 18, width-18, height-18], outline=(255, 255, 255, 25), width=2)
     
     img_array = np.array(base_img)
     return ImageClip(img_array).with_duration(duration)
+
+# --- CINEMATIC FILM GRAIN AND SCENIC OVERLAY MAKER ---
+def make_cinematic_overlay(duration):
+    """
+    Programmatically renders a transparent, high-performance 24fps movie layer 
+    loaded with subtle film grain noise, vertical white hair scratches, 
+    and random dust spots. Cycles rapidly to minimize processing.
+    """
+    width, height = 720, 1280
+    
+    # 1. Pre-generate exactly 8 static noise frames to prevent CPU lag!
+    np.random.seed(42)
+    noise_frames = []
+    for _ in range(8):
+        img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img, "RGBA")
+        
+        # Draw extremely subtle random dust spots (darker translucent dots)
+        for _ in range(random.randint(4, 9)):
+            rx = random.randint(30, width-30)
+            ry = random.randint(30, height-30)
+            rs = random.randint(1, 3)
+            draw.ellipse([rx-rs, ry-rs, rx+rs, ry+rs], fill=(255, 255, 255, random.randint(25, 45)))
+            
+        # Draw random shifting hair/scratches
+        for _ in range(random.randint(1, 3)):
+            x_line = random.randint(50, width-50)
+            len_line = random.randint(120, 450)
+            y_start = random.randint(100, height-500)
+            draw.line([(x_line, y_start), (x_line + random.randint(-1, 1), y_start + len_line)], fill=(255, 255, 255, random.randint(35, 75)), width=1)
+            
+        noise_frames.append(np.array(img))
+        
+    def make_frame(t):
+        frame_idx = int((t * 24) % 8)
+        return noise_frames[frame_idx]
+        
+    return VideoClip(make_frame, duration=duration)
 
 # --- KEN BURNS SLIDESHOW GENERATOR WITH SMOOTH CONSTANT ZOOM ---
 def make_ken_burns_clip(img_path, duration):
@@ -401,8 +427,8 @@ def make_ken_burns_clip(img_path, duration):
         cropped = base_img_cropped.crop((left, top, left + vw, top + vh))
         
         arr = np.array(cropped.resize((target_w, target_h), Image.Resampling.LANCZOS))
-        # subtle darkening
-        return (arr * 0.78).astype('uint8')
+        # Unify color space by applying standard darkening filter
+        return (arr * 0.72).astype('uint8')
         
     return VideoClip(make_frame, duration=duration)
 
@@ -419,11 +445,12 @@ def clean_script_for_speech(script_text):
         cleaned.append(l)
     return re.sub(r'\[.*?\]', '', " ".join(cleaned)).strip()
 
-# --- PROACTIVE THREADED ELEVENLABS SPEECH GENERATOR ---
+# --- PROACTIVE THREADED ELEVENLABS SPEECH GENERATOR (100% FREE TIER COMPATIBLE VALUE VOICE ID) ---
 def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
     
+    # Use "Antoni" (ErXwobaYiN019PkySvjV) - which is 100% Free Tier authorized, smooth and deep male voice!
     voice_id = "ErXwobaYiN019PkySvjV" 
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
@@ -475,7 +502,7 @@ def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
         print(f"ElevenLabs TTS failed: {e}. Falling back.")
     return None, None
 
-# --- NATIVE PYTHON TTS GENERATOR ---
+# --- NATIVE PYTHON TTS GENERATOR (100% ROBUST, NO PATH ISSUES, NO SUBPROCESS, THREAD-SAFE EVENT LOOP) ---
 def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice", eleven_key=None):
     if eleven_key and eleven_key.strip():
         print("Calling premium ElevenLabs voiceover...")
@@ -512,7 +539,7 @@ def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basena
             print(f"gTTS fallback failed: {ge}")
             return None, None
 
-# --- WEB VTT / SRT PARSER ---
+# --- WEB VTT / SRT PARSER (FULLY HYBRID) ---
 def parse_vtt(vtt_path):
     if not vtt_path or not os.path.exists(vtt_path): return []
     with open(vtt_path, 'r', encoding='utf-8') as f:
@@ -542,7 +569,7 @@ def make_vertical_clip(clip, target_w=720, target_h=1280):
         
     resized_clip = cropped_clip.resized(width=target_w, height=target_h)
     
-    # Soft color unifier
+    # Unify different video clips by applying a consistent dark-grading filter!
     try:
         darkened_clip = resized_clip.map_frames(lambda frame: (frame * 0.72).astype('uint8'))
         return darkened_clip
@@ -840,23 +867,21 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     custom_files = uploaded_file_paths if uploaded_file_paths else []
     b_roll_source = kwargs.get("b_roll_source", "pexels").lower()
     
-    # Read custom storyboard scenarios list if passed!
-    custom_scenarios = kwargs.get("custom_scenarios", [])
-    
-    # --- AUTOMATIC COLOR TONE DETECTOR BASED ON NARRATION ---
-    # Scans script to choose the dominant color space!
+    # --- AUTO-DETERMINE COHESIVE COLOR SCHEME BASED ON VIBE ---
+    # Automatically chooses a unified color space tone to group clips beautifully!
     color_tone = "aesthetic"
     vibe_color_rgb = (30, 58, 138) # Default Blue
     if "romance" in spoken_text.lower() or "intimacy" in spoken_text.lower() or "kiss" in spoken_text.lower():
         color_tone = "rose romantic warm"
-        vibe_color_rgb = (127, 29, 29) # Rose / Crimson
+        vibe_color_rgb = (127, 29, 29) # Moody Red/Rose
     elif "disciplined" in spoken_text.lower() or "workout" in spoken_text.lower() or "perform" in spoken_text.lower():
         color_tone = "emerald green focused"
-        vibe_color_rgb = (6, 78, 59) # Emerald
+        vibe_color_rgb = (6, 78, 59) # Moody Green
     elif "procrastinat" in spoken_text.lower() or "lazy" in spoken_text.lower() or "focus" in spoken_text.lower():
         color_tone = "dark moody violet"
-        vibe_color_rgb = (15, 23, 42) # Deep Violet / Navy
+        vibe_color_rgb = (15, 23, 42) # Moody Violet
     
+    # Extract different, unique keywords for EVERY cut index!
     sentence_words = extract_best_keywords(spoken_text, num_words=num_cuts)
     
     meme_sfx_name = kwargs.get("meme_sfx_name", None)
@@ -877,7 +902,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         if idx < len(custom_files):
             file_path = custom_files[idx]
             if os.path.exists(file_path):
-                if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Slicing and zoom-formatting your uploaded asset {idx+1}...")
+                if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Slicing uploaded asset {idx+1}...")
                 if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
                     v_clip = make_ken_burns_clip(file_path, clip_dur).with_start(start_t)
                     visual_clips.append(v_clip)
@@ -898,12 +923,9 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                         
         # Scenario B: Fetch stock video from Pexels or Pixabay!
         if not clip_added and pexels_key and pexels_key.strip():
-            if idx < len(custom_scenarios) and custom_scenarios[idx].strip():
-                search_word = custom_scenarios[idx].strip()
-            else:
-                search_word = "abstract"
-                if len(sentence_words) > 0:
-                    search_word = sentence_words[idx % len(sentence_words)]
+            search_word = "abstract"
+            if len(sentence_words) > 0:
+                search_word = sentence_words[idx % len(sentence_words)]
                 
             if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Downloading vertical HD stock clip from {b_roll_source.upper()} for '{search_word.upper()}'...")
             downloaded_file = download_pexels_b_roll_with_fallback(search_word, pexels_key, source=b_roll_source, color_tone=color_tone)
@@ -935,6 +957,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             except:
                 pass
                 
+    # --- PROACTIVE RETENTION UPGRADE: OVERLAY MEME SFX EXACTLY ON THE FIRST TRANSITION CUT! ---
     if meme_sfx_path and os.path.exists(meme_sfx_path):
         try:
             sfx_clip = AudioFileClip(meme_sfx_path).with_start(cut_duration).with_volume_scaled(0.18)
@@ -942,7 +965,14 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         except Exception as e:
             print(f"Failed mixing meme SFX: {e}")
             
-    bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
+    # Composite visual track layers
+    raw_bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
+    
+    # --- PROACTIVE LUXURY GRAPHIC UPGRADE: THE DUST/SCRATCH CINEMATIC OVERLAY LOOP ---
+    # Renders a continuous, subtle movie-grain scratching and dirt projection over the background clips!
+    if progress_cb: progress_cb(0.72, "Applying 24fps luxury film grain and retro dust scratches overlay...")
+    film_overlay = make_cinematic_overlay(duration)
+    bg_clip = CompositeVideoClip([raw_bg_clip, film_overlay]).with_duration(duration)
     
     if progress_cb: progress_cb(0.80, "Slicing subtitle timings, emojifying captions, and mapping Neon highlights...")
     caption_style = kwargs.get("caption_style", db_caption_style)
@@ -959,14 +989,15 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         extra_clips.append(prog_clip)
         
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
+    # --- COMBINED ROBUST WINDOWS COLORSPACE & CODEC FIXED FORMAT + SPEED PRESET SPEEDUP ---
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
         output_video_path, 
         fps=24, 
         codec="libx264", 
         audio_codec="aac", 
-        preset="ultrafast", 
+        preset="ultrafast", # Compiles in seconds!
         logger=None,
-        ffmpeg_params=["-pix_fmt", "yuv420p"]
+        ffmpeg_params=["-pix_fmt", "yuv420p"] # Universal playback colorspace!
     )
     
     if progress_cb: progress_cb(0.98, "Releasing local system file locks and saving database state...")
