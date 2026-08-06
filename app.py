@@ -544,15 +544,22 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
     else:
         active_video_key = huggingface_token
         
-    if 'active_script' not in st.session_state:
-        st.error("⚠️ Please click '🤖 STEP 1: DRAFT SCRIPT & ANALYZE KEYWORDS' first to review and edit your script before compiling!")
-    elif not active_video_key or not active_video_key.strip():
+    if not active_video_key or not active_video_key.strip():
         st.error(f"❌ {b_roll_source_label} Key/Token is missing! Please configure it in the left sidebar under Advanced API Keys first!")
-    elif st.session_state['active_title'] == "Safety Warning":
-        st.error("❌ Cannot compile: Please select a non-restricted creative topic in Step 2!")
     else:
-        preset_title = st.session_state['active_title']
-        preset_script = st.session_state['active_script']
+        # If they clicked compile but forgot to click Step 1, auto-draft the script silently right now!
+        if 'active_script' not in st.session_state:
+            title, script, tags, trigger_used = auto_generate_script_local(topic_input, style_choice)
+            st.session_state['active_title'] = title
+            st.session_state['active_script'] = script
+            st.session_state['active_tags'] = tags
+            st.session_state['active_trigger'] = trigger_used
+            
+        if st.session_state['active_title'] == "Safety Warning":
+            st.error("❌ Cannot compile: Please select a non-restricted creative topic in Step 2!")
+        else:
+            preset_title = st.session_state['active_title']
+            preset_script = st.session_state['active_script']
         preset_tags = st.session_state.get('active_tags', 'shorts, viral')
         trigger_used = st.session_state.get('active_trigger', 'Identity Signaling')
         scenarios_input = st.session_state.get('custom_scenarios', [])
