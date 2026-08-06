@@ -585,13 +585,16 @@ def make_vertical_clip(clip, target_w=720, target_h=1280):
         
     resized_clip = cropped_clip.resized(width=target_w, height=target_h)
     
-    # Soft color unifier
+    # --- DYNAMIC MOVIE-GRID MAP_FRAMES FUNCTION COMPATIBLE WITH ALL MOVIEPY BUILDS ---
     try:
-        darkened_clip = resized_clip.fl_image(lambda image: (image * 0.72).astype('uint8'))
+        darkened_clip = resized_clip.map_frames(lambda frame: (frame * 0.72).astype('uint8'))
         return darkened_clip
     except Exception as e:
-        print(f"Frame map darkening failed: {e}")
-        return resized_clip
+        print(f"map_frames failed, falling back to standard MoviePy fl_image: {e}")
+        try:
+            return resized_clip.fl_image(lambda image: (image * 0.72).astype('uint8'))
+        except:
+            return resized_clip
 
 # --- DYNAMIC WORD-BY-WORD CHOPPER ---
 def split_subtitles_into_words(subtitles, words_per_clip=1):
@@ -837,7 +840,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     if progress_cb: progress_cb(0.05, "Cleaning script...")
     spoken_text = clean_script_for_speech(script_text)
     
-    # Check if ElevenLabs key is present
     eleven_key = kwargs.get("elevenlabs_api_key", None)
     
     if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
@@ -888,7 +890,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     custom_scenarios = kwargs.get("custom_scenarios", [])
     
     # --- AUTO-DETERMINE COHESIVE COLOR SCHEME BASED ON VIBE ---
-    # Automatically chooses a unified color space tone to group clips beautifully!
     color_tone = "aesthetic"
     vibe_color_rgb = (30, 58, 138) # Default Blue
     if "romance" in spoken_text.lower() or "intimacy" in spoken_text.lower() or "kiss" in spoken_text.lower():
@@ -901,7 +902,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         color_tone = "dark moody violet"
         vibe_color_rgb = (15, 23, 42) # Moody Violet
     
-    # Extract different, unique keywords for EVERY cut index!
     sentence_words = extract_best_keywords(spoken_text, num_words=num_cuts)
     
     # --- PROACTIVE RETENTION UPGRADE: DOWNLOAD MEME SFX LOOP ---
@@ -909,6 +909,8 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     meme_sfx_path = None
     if meme_sfx_name and meme_sfx_name.lower() != "none":
         meme_sfx_path = download_free_meme_sfx(meme_sfx_name)
+    
+    hf_token = kwargs.get("hf_token", None)
     
     for idx in range(num_cuts):
         start_t = idx * cut_duration
@@ -942,9 +944,34 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                     except Exception as e:
                         print(f"Failed loading uploaded clip: {e}")
                         
-        # Scenario B: Fetch stock video from Pexels or Pixabay!
-        if not clip_added and pexels_key and pexels_key.strip():
-            # --- PROACTIVE OPTIMIZATION: USE USER'S CUSTOM DIRECT SCENARIOS OVERRIDE ---
+        # --- NEW DEFINTIONAL LOGIC: SCENARIO B - GENERATE TRUE AI VIDEO FROM SCRATCH IN FIRST PRIORITY! ---
+        if not clip_added and b_roll_source == "huggingface" and hf_token and hf_token.strip():
+            # Use user's custom scenario prompt if provided, otherwise fallback to extracted keywords!
+            if idx < len(custom_scenarios) and custom_scenarios[idx].strip():
+                search_word = custom_scenarios[idx].strip()
+            else:
+                search_word = "abstract"
+                if len(sentence_words) > 0:
+                    search_word = sentence_words[idx % len(sentence_words)]
+                    
+            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Generating completely unique vertical MP4 clip for '{search_word.upper()}' using Stable Video Diffusion...")
+            downloaded_file = generate_true_ai_video_clip(search_word, hf_token)
+            if downloaded_file and os.path.exists(downloaded_file):
+                try:
+                    raw_v = VideoFileClip(downloaded_file)
+                    sub_start = 0.0
+                    if raw_v.duration > clip_dur + 1.0:
+                        np.random.seed(idx)
+                        sub_start = np.random.uniform(0.0, raw_v.duration - clip_dur)
+                    sub_v = raw_v.subclipped(sub_start, sub_start + clip_dur).with_start(start_t)
+                    scaled_sub = make_vertical_clip(sub_v)
+                    visual_clips.append(scaled_sub)
+                    clip_added = True
+                except Exception as e:
+                    print(f"Failed loading generative clip: {e}")
+                        
+        # Scenario C: Fetch stock video from Pexels or Pixabay!
+        if not clip_added and b_roll_source in ("pexels", "pixabay") and pexels_key and pexels_key.strip():
             if idx < len(custom_scenarios) and custom_scenarios[idx].strip():
                 search_word = custom_scenarios[idx].strip()
             else:
@@ -968,7 +995,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 except Exception as e:
                     print(f"Failed loading downloaded stock: {e}")
                     
-        # Scenario C: Fallback to Beautiful Editorial Solid-Color Graphic Cards!
+        # Scenario D: Fallback to Beautiful Editorial Solid-Color Graphic Cards!
         if not clip_added:
             if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, "Generating custom-color editorial backup graphic card...")
             p_clip = make_solid_color_card_clip(clip_dur, color_tuple=vibe_color_rgb).with_start(start_t)
@@ -988,7 +1015,12 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         except Exception as e:
             print(f"Failed mixing meme SFX: {e}")
             
-    bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
+    raw_bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
+    
+    # Layer film scratch overlay
+    if progress_cb: progress_cb(0.72, "Applying 24fps luxury film grain and retro dust scratches overlay...")
+    film_overlay = make_cinematic_overlay(duration)
+    bg_clip = CompositeVideoClip([raw_bg_clip, film_overlay]).with_duration(duration)
     
     if progress_cb: progress_cb(0.80, "Slicing subtitle timings, emojifying captions, and mapping Neon highlights...")
     caption_style = kwargs.get("caption_style", db_caption_style)
