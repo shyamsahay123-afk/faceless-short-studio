@@ -587,7 +587,7 @@ def make_vertical_clip(clip, target_w=720, target_h=1280):
     
     # Soft color unifier
     try:
-        darkened_clip = resized_clip.map_frames(lambda frame: (frame * 0.72).astype('uint8'))
+        darkened_clip = resized_clip.fl_image(lambda image: (image * 0.72).astype('uint8'))
         return darkened_clip
     except Exception as e:
         print(f"Frame map darkening failed: {e}")

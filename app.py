@@ -536,7 +536,7 @@ st.divider()
 # SINGLE GIANT ONE-CLICK MASTER ACTION BUTTON
 # ==============================================================================
 if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use_container_width=True):
-    # Determine the key to validate
+        # Determine the key to validate
     if b_roll_source_val == "pexels":
         active_video_key = pexels_api_key
     elif b_roll_source_val == "pixabay":
@@ -606,7 +606,7 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 bg_music_path=bg_music_path,
                 bg_music_volume=music_volume,
                 show_progress_bar=show_progress_bar,
-                pexels_api_key=pexels_api_key,
+                pexels_api_key=pexels_api_key if b_roll_source_val == "pexels" else (pixabay_api_key if b_roll_source_val == "pixabay" else ""),
                 elevenlabs_api_key=elevenlabs_api_key,
                 progress_callback=render_progress,
                 caption_style=caption_style_code,
