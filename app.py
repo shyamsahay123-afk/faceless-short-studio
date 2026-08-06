@@ -108,7 +108,6 @@ def save_key_to_file(filename, key):
 def clean_api_key(key):
     if not key:
         return ""
-    # Auto-strip any trailing spaces, hyphens, or comments (like " - pixa")
     return str(key).split(" - ")[0].split(" ")[0].strip()
 
 # --- FAST CACHED API CONNECTION STATUS TESTERS ---
@@ -145,6 +144,19 @@ def test_elevenlabs_key_connection(api_key):
     try:
         r = requests.post(url, headers={"xi-api-key": api_key}, json={"text": "."}, timeout=10)
         if r.status_code in (200, 402):
+            return "valid"
+        return "invalid"
+    except:
+        return "error"
+
+@st.cache_data(ttl=60)
+def test_huggingface_key_connection(api_key):
+    if not api_key or not api_key.strip():
+        return "empty"
+    url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+    try:
+        r = requests.post(url, headers={"Authorization": f"Bearer {api_key}"}, json={"inputs": "test"}, timeout=10)
+        if r.status_code in (200, 503): # 200 success, 503 loading but authenticated
             return "valid"
         return "invalid"
     except:
@@ -249,8 +261,6 @@ Stop throwing away your focus:
         
     selected_hook = random.choice(hooks)
     custom_hook = selected_hook.replace("[Topic]", topic).replace("[Niche]", topic).replace("[Role/Niche]", "performer").replace("[Role/Goal]", "leader").replace("[Bad Habit/Mistake]", "wasting focus").replace("[Money/Time/Health]", "focus")
-    
-    # Clean up any leftover raw template tags in fallback selections
     custom_hook = custom_hook.replace("[X]", "intelligence").replace("[Y]", "consistency").replace("[Key Strategy]", "Habit Automation")
     
     full_script = f"""[0-3 sec HOOK]\n{custom_hook}\n\n[PSYCHOLOGY TRIGGER: {hook_category}]\n{trigger_desc}\n\n{value_delivery}\n\n[ENGAGEMENT CTA]\n{cta}"""
@@ -293,6 +303,15 @@ with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
     if elevenlabs_api_key != saved_eleven:
         save_key_to_file("elevenlabs_key.txt", elevenlabs_api_key)
     st.markdown(display_status_badge(test_elevenlabs_key_connection(elevenlabs_api_key)), unsafe_allow_html=True)
+    st.write("")
+    
+    # Hugging Face Key
+    saved_hf = clean_api_key(load_key_from_file("huggingface_token.txt"))
+    raw_hf_token = st.text_input("Hugging Face Token (AI Video)", type="password", value=saved_hf)
+    huggingface_token = clean_api_key(raw_hf_token)
+    if huggingface_token != saved_hf:
+        save_key_to_file("huggingface_token.txt", huggingface_token)
+    st.markdown(display_status_badge(test_huggingface_key_connection(huggingface_token)), unsafe_allow_html=True)
 
 st.sidebar.divider()
 all_shorts = db.get_all_shorts()
@@ -329,6 +348,36 @@ for idx, trend in enumerate(trending_concepts):
         )
         if st.button("🔌 Use This Concept Prompt", key=f"trend_btn_{idx}"):
             st.session_state['topic_override'] = trend
+            st.rerun()
+
+# --- NEW STUNNING GENERATIVE AI TEST ROOM (THE IMPOSSIBLE PROMPT PROOVER!) ---
+st.write("")
+st.markdown("### 🧪 Step 1.5: Generative AI Test Room (Impossible Prompts)")
+st.write("How do you prove that your AI is drawing a completely unique video from scratch rather than just searching Google? **Try an 'Impossible Prompt'!** Standard stock databases only have real-world videos. They do *not* have sci-fi or surreal videos. Select a prompt below, choose B-Roll Source: **Hugging Face AI** in Step 3, and watch the AI draw the scene in seconds!")
+
+with st.expander("🧪 Open Generative AI Test Lab", expanded=False):
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        st.markdown("**1. Surreal Sci-Fi Concept**")
+        st.write("*Prompt:* `A glowing neon astronaut riding a pink horse on Mars, vertical`")
+        if st.button("🔌 Load Sci-Fi Prompt", type="secondary"):
+            st.session_state['topic_override'] = "glowing neon astronaut riding a pink horse on Mars, vertical"
+            st.session_state['b_roll_override'] = "🤖 True AI Generated (Hugging Face - Free)"
+            st.rerun()
+            
+        st.markdown("**2. Aesthetic Fantasy Concept**")
+        st.write("*Prompt:* `A neon-purple human brain floating inside a clear glass jar, dark room`")
+        if st.button("🔌 Load Fantasy Prompt", type="secondary"):
+            st.session_state['topic_override'] = "neon-purple human brain floating inside a clear glass jar, dark room"
+            st.session_state['b_roll_override'] = "🤖 True AI Generated (Hugging Face - Free)"
+            st.rerun()
+            
+    with col_t2:
+        st.markdown("**3. Cute Surreal Concept**")
+        st.write("*Prompt:* `A cute fluffy orange cat wearing a miniature medieval helmet writing on computer`")
+        if st.button("🔌 Load Cute Prompt", type="secondary"):
+            st.session_state['topic_override'] = "cute fluffy orange cat wearing a miniature medieval helmet writing on computer"
+            st.session_state['b_roll_override'] = "🤖 True AI Generated (Hugging Face - Free)"
             st.rerun()
 
 st.divider()
@@ -385,7 +434,7 @@ if 'active_script' in st.session_state:
     pacing_dur = 2.0
     num_cuts_est = int(np.ceil(duration_est / pacing_dur))
     
-    # --- INTERACTIVE VISUAL STORYBOARD PROMPTER ("Make scenario directly") ---
+    # --- INTERACTIVE VISUAL STORYBOARD PROMPTER ---
     st.markdown("### 🎬 Step 2.5: Interactive Visual Storyboard Director")
     st.write("Direct what visual clip appears on screen for every 2-second block of your video! Overwrite the default keywords with custom prompts (e.g. *'couple hugging'*, *'fireplace'*) to direct your scenario:")
     
@@ -436,11 +485,24 @@ caption_mapping = {
 }
 caption_style_code, caption_color = caption_mapping[caption_theme_label]
 
-b_roll_source_label = col_s4.selectbox("🏞️ Stock B-Roll Source", [
-    "Pexels (Free)",
-    "Pixabay (Free)"
-])
-b_roll_source_val = "pexels" if "Pexels" in b_roll_source_label else "pixabay"
+# B-Roll Visual Source dropdown supporting our brand new True AI Generative SVD!
+default_b_roll_idx = 0
+b_roll_override = st.session_state.get('b_roll_override', None)
+if b_roll_override:
+    if "Hugging" in b_roll_override: default_b_roll_idx = 2
+
+b_roll_source_label = col_s4.selectbox("🏞️ Visual Source", [
+    "Pexels (Free Stock)",
+    "Pixabay (Free Stock)",
+    "🤖 True AI Generated (Hugging Face - Free)"
+], index=default_b_roll_idx)
+
+if "Pexels" in b_roll_source_label:
+    b_roll_source_val = "pexels"
+elif "Pixabay" in b_roll_source_label:
+    b_roll_source_val = "pixabay"
+else:
+    b_roll_source_val = "huggingface"
 
 meme_sfx_label = col_s5.selectbox("🔥 Meme Sound", [
     "None",
@@ -472,15 +534,21 @@ st.divider()
 # SINGLE GIANT ONE-CLICK MASTER ACTION BUTTON
 # ==============================================================================
 if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use_container_width=True):
-    active_video_key = pexels_api_key if b_roll_source_val == "pexels" else pixabay_api_key
+    # Determine the key to validate
+    if b_roll_source_val == "pexels":
+        active_video_key = pexels_api_key
+    elif b_roll_source_val == "pixabay":
+        active_video_key = pixabay_api_key
+    else:
+        active_video_key = huggingface_token
+        
     if 'active_script' not in st.session_state:
         st.error("⚠️ Please click '🤖 STEP 1: DRAFT SCRIPT & ANALYZE KEYWORDS' first to review and edit your script before compiling!")
     elif not active_video_key or not active_video_key.strip():
-        st.error(f"❌ {b_roll_source_label} Key is missing! Please configure your {b_roll_source_label} Key in the left sidebar under Advanced API Keys first!")
+        st.error(f"❌ {b_roll_source_label} Key/Token is missing! Please configure it in the left sidebar under Advanced API Keys first!")
     elif st.session_state['active_title'] == "Safety Warning":
         st.error("❌ Cannot compile: Please select a non-restricted creative topic in Step 2!")
     else:
-        # Load edited variables from state
         preset_title = st.session_state['active_title']
         preset_script = st.session_state['active_script']
         preset_tags = st.session_state.get('active_tags', 'shorts, viral')
@@ -519,7 +587,7 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             custom_filepaths = [save_uploaded_file(f) for f in uploaded_files]
             
         try:
-            # Call our ultimate hybrid compiler with custom scenarios!
+            # Call our ultimate hybrid compiler!
             v_path, a_path, vtt_path = video.create_hybrid_ai_video(
                 short_id, 
                 preset_script, 
@@ -529,14 +597,15 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 bg_music_path=bg_music_path,
                 bg_music_volume=music_volume,
                 show_progress_bar=show_progress_bar,
-                pexels_api_key=active_video_key,
+                pexels_api_key=pexels_api_key,
                 elevenlabs_api_key=elevenlabs_api_key,
                 progress_callback=render_progress,
                 caption_style=caption_style_code,
                 cut_duration=cut_duration_val,
                 b_roll_source=b_roll_source_val,
                 custom_scenarios=scenarios_input,
-                meme_sfx_name=meme_sfx_label
+                meme_sfx_name=meme_sfx_label,
+                hf_token=huggingface_token
             )
             
             db.update_short_video(short_id, v_path, a_path, vtt_path, status='created')
