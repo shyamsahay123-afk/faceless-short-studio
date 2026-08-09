@@ -13,7 +13,20 @@ from moviepy import (
     VideoClip, ImageClip, VideoFileClip, AudioFileClip, CompositeVideoClip, TextClip, concatenate_videoclips, CompositeAudioClip, concatenate_audioclips
 )
 from PIL import Image, ImageDraw
-from huggingface_hub import InferenceClient
+try:
+    from huggingface_hub import InferenceClient
+except ImportError:
+    import subprocess
+    import sys
+    try:
+        print("[System Info] 'huggingface_hub' package not found. Programmatically installing it now...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "huggingface_hub"])
+        from huggingface_hub import InferenceClient
+    except Exception as e:
+        print(f"[Warning] Failed to automatically install 'huggingface_hub': {e}")
+        class InferenceClient:
+            def __init__(self, *args, **kwargs):
+                raise ImportError("Please run: pip install huggingface_hub")
 
 # ==============================================================================
 # --- PROACTIVE WINDOWS & PYTHON 3.14 COMPATIBILITY PATCHES ---
