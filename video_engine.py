@@ -927,6 +927,14 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             except:
                 pass
                 
+    pixabay_key = None
+    if os.path.exists("pixabay_key.txt"):
+        try:
+            with open("pixabay_key.txt", "r", encoding="utf-8") as f:
+                pixabay_key = f.read().strip()
+        except:
+            pass
+            
     custom_files = uploaded_file_paths if uploaded_file_paths else []
     b_roll_source = kwargs.get("b_roll_source", "pexels").lower()
     
