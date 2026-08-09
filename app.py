@@ -154,11 +154,15 @@ def test_huggingface_key_connection(api_key):
     if not api_key or not api_key.strip():
         return "empty"
     # Use Hugging Face's official, lightweight user identity API. 
-    # Extremely fast (0.1s), 100% reliable, and never times out!
-    url = "https://huggingface.co/api/whoami"
+    # Try both standard and modern v2 endpoints to support all fine-grained and classic tokens!
     try:
-        r = requests.get(url, headers={"Authorization": f"Bearer {api_key}"}, timeout=10)
+        # Try v2 first (supports fine-grained and classic tokens)
+        r = requests.get("https://huggingface.co/api/whoami-v2", headers={"Authorization": f"Bearer {api_key}"}, timeout=10)
         if r.status_code == 200:
+            return "valid"
+        # Fallback to legacy whoami
+        r2 = requests.get("https://huggingface.co/api/whoami", headers={"Authorization": f"Bearer {api_key}"}, timeout=10)
+        if r2.status_code == 200:
             return "valid"
         return "invalid"
     except:
