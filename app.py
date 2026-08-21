@@ -218,7 +218,7 @@ Here is the raw relationship shift:
 1. The Core Shift: Shift from passive attraction to deep presence.
 2. The Intimacy Loop: Lock in undivided, focused attention for 30 minutes every single night.
 3. Emotional Safety: Create a space of absolute trust first. Raw chemistry isn't about physical traits—it's about feeling safe to connect."""
-        cta = "Save this video so you don't lose it + Follow for daily elite frameworks ❤️"
+        cta = "[Save this video so you don't lose it + Follow for daily elite frameworks ❤️]"
         
     elif "Dramatic" in style_choice:
         hook_category = "Curiosity Gap"
@@ -233,7 +233,7 @@ Here is the exact neuroscience breakdown:
 1. Cognitive Overload: Intelligent brains analyze too many variables, causing micro-friction.
 2. The Action Boundary: To stop overthinking, establish a strict 20-minute daily execution sprint.
 3. Habit Automation: Automate your morning ritual so your prefrontal cortex never has to choose. Eliminate cognitive friction to build unshakeable momentum."""
-        cta = "Save this video so you don't lose it + Follow for daily elite frameworks 📈"
+        cta = "[Save this video so you don't lose it + Follow for daily elite frameworks 📈]"
         
     elif "Motivational" in style_choice:
         hook_category = "Identity Signaling"
@@ -248,7 +248,7 @@ Here is the elite performance strategy:
 1. Mindset Shift: Drop the amateur reliance on motivation.
 2. The 20-Minute Focus Rule: Lock yourself in a room with zero devices and write.
 3. Deep Execution Sprint: Lock in for 90 minutes of deep work every morning before scrolling."""
-        cta = "Drop a 🔥 in the comments if you are executing this today!"
+        cta = "[Drop a 🔥 in the comments if you are executing this today!]"
         
     else:
         hook_category = "Loss Aversion"
@@ -263,7 +263,7 @@ Stop throwing away your focus:
 1. Friction Point: Your phone is a slot machine stealing your attention span.
 2. The dopamine drain: Every cheap scroll reduces your brain's capacity for deep work.
 3. The instant shift: Move your phone to another room before you start your morning routine."""
-        cta = "Save this video so you don't lose it + Follow for daily elite frameworks 📈"
+        cta = "[Save this video so you don't lose it + Follow for daily elite frameworks 📈]"
         
     selected_hook = random.choice(hooks)
     custom_hook = selected_hook.replace("[Topic]", topic).replace("[Niche]", topic).replace("[Role/Niche]", "performer").replace("[Role/Goal]", "leader").replace("[Bad Habit/Mistake]", "wasting focus").replace("[Money/Time/Health]", "focus")
