@@ -102,7 +102,25 @@ CONCEPT_EXPANSIONS = {
     "secrets": "mysterious figure shadow smoke",
     "truth": "hundred percent 100 badge neon",
     "mistake": "crumpled paper trash basket",
-    "destroying": "fire flames burning close up"
+    "destroying": "fire flames burning close up",
+    # Upgrade: Dynamic Semantic mappings for generic stock keywords
+    "people": "cinematic silhouettes luxury dark city night",
+    "place": "dark moody luxury room background neon glowing",
+    "chatting": "shadowy figures talking smoky dark lounge cinematic",
+    "phone": "glowing smartphone screen close up dark room hands",
+    "talk": "cinematic shadowy silhouettes talking lounge",
+    "man": "shadowy man silhouette walking dark street slow motion",
+    "woman": "cinematic woman walking dark rain night light close up",
+    "think": "close up looking thoughtful moody library warm light",
+    "look": "deep focused eye macro cinematic reflections",
+    "work": "dark luxury office screen glowing code close up",
+    "office": "empty dark luxury office warm lamp light",
+    "study": "dark library old bookshelves glowing warm candle",
+    "time": "vintage golden hourglass sand running macro dark",
+    "busy": "hyperlapse busy city street traffic lights night",
+    "success": "luxury sports car driving city night neon",
+    "wealth": "gold bars stack vaults dark shadow cinematic",
+    "consistency": "slow cinematic ticking grandfather clock gear close up"
 }
 
 def expand_keyword_to_concept(word):
@@ -510,7 +528,12 @@ def make_ken_burns_clip(img_path, duration):
         cropped = base_img_cropped.crop((left, top, left + vw, top + vh))
         
         arr = np.array(cropped.resize((target_w, target_h), Image.Resampling.LANCZOS))
-        return (arr * 0.72).astype('uint8')
+        # Apply luxury color wash desaturation & warming
+        arr_f = arr.astype(float)
+        arr_f[:, :, 0] *= 0.76  # Rich Red/Gold
+        arr_f[:, :, 1] *= 0.70  # Gold Green
+        arr_f[:, :, 2] *= 0.58  # Slate Blue (desaturated)
+        return np.clip(arr_f, 0, 255).astype('uint8')
         
     return VideoClip(make_frame, duration=duration)
 
@@ -574,6 +597,73 @@ def build_retention_overlays(duration):
         overlays.append(loop_clip)
         
     return overlays
+
+# --- CINEMATIC RADIAL VIGNETTE OVERLAY (EYE FUNNEL MASK) ---
+def make_vignette_overlay(duration):
+    width, height = 720, 1280
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    cx, cy = width // 2, height // 2
+    max_r = int(np.sqrt(cx**2 + cy**2))
+    
+    # Draw concentric black circles with increasing opacity towards the edges
+    for r in range(max_r, 0, -8):
+        opacity = int((r / max_r) ** 2.2 * 170)
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(0, 0, 0, opacity), width=8)
+        
+    img_arr = np.array(img)
+    return ImageClip(img_arr).with_duration(duration)
+
+# --- DYNAMIC MICRO-MEME STICKER OVERLAY ---
+def make_micro_meme_sticker(meme_type):
+    width, height = 440, 110
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    # Draw rounded dark background with gold warning border
+    draw.rounded_rectangle(
+        [(10, 10), (width - 10, height - 10)],
+        radius=20,
+        fill=(15, 23, 42, 230), # iOS Navy Dark
+        outline=(255, 215, 0, 255), # Gold
+        width=3
+    )
+    
+    # Clean up name for text rendering
+    text = f"🚨 {meme_type.upper().replace('_', ' ')}"
+    from PIL import ImageFont
+    try:
+        font = ImageFont.load_default(size=24)
+    except:
+        font = ImageFont.load_default()
+        
+    text_w = len(text) * 12
+    text_x = (width - text_w) // 2
+    text_y = (height - 34) // 2
+    
+    draw.text((text_x, text_y), text, fill=(255, 215, 0, 255), font=font)
+    return img
+
+# --- DRAMATIC COGNITIVE SOUND DROP ENGINE ---
+def apply_sound_drop_ducking(music_clip, drop_times):
+    if not drop_times:
+        return music_clip
+        
+    def volume_filter(t):
+        try:
+            # Handle array inputs safely
+            mask = np.ones_like(t, dtype=float)
+            for dt in drop_times:
+                mask[(t >= dt) & (t <= dt + 0.4)] = 0.08
+            return mask
+        except:
+            # Handle scalar fallback
+            for dt in drop_times:
+                if dt <= t <= dt + 0.4:
+                    return 0.08
+            return 1.0
+            
+    return music_clip.fl(lambda gf, t: gf(t) * volume_filter(t))
 
 # --- SPEECH CLEANER ---
 def clean_script_for_speech(script_text):
@@ -712,13 +802,20 @@ def make_vertical_clip(clip, target_w=720, target_h=1280):
     resized_clip = cropped_clip.resized(width=target_w, height=target_h)
     
     # --- DYNAMIC MOVIE-GRID MAP_FRAMES FUNCTION COMPATIBLE WITH ALL MOVIEPY BUILDS ---
+    def apply_luxury_lut_frame(frame):
+        arr = frame.astype(float)
+        arr[:, :, 0] *= 0.76  # Rich Red/Gold
+        arr[:, :, 1] *= 0.70  # Gold Green
+        arr[:, :, 2] *= 0.58  # Slate Blue (desaturated)
+        return np.clip(arr, 0, 255).astype('uint8')
+        
     try:
-        darkened_clip = resized_clip.map_frames(lambda frame: (frame * 0.72).astype('uint8'))
+        darkened_clip = resized_clip.map_frames(apply_luxury_lut_frame)
         return darkened_clip
     except Exception as e:
         print(f"map_frames failed, falling back to standard MoviePy fl_image: {e}")
         try:
-            return resized_clip.fl_image(lambda image: (image * 0.72).astype('uint8'))
+            return resized_clip.fl_image(apply_luxury_lut_frame)
         except:
             return resized_clip
 
@@ -933,7 +1030,7 @@ def build_subtitle_clips(subtitles, target_w=720, font_size=55, color='yellow'):
     return tc
 
 # --- SMART BACKGROUND AUDIO MIXER ---
-def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.10):
+def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.10, drop_times=None):
     voice_audio = AudioFileClip(voice_audio_path)
     
     if not bg_music_path or not os.path.exists(bg_music_path):
@@ -950,6 +1047,12 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
         music_audio = concatenate_audioclips([music_audio] * loops_needed)
         
     music_audio = music_audio.with_duration(duration)
+    
+    # Upgrade: Apply Dynamic Sound Drop Ducking at specific timestamps!
+    if drop_times:
+        print(f"[Sound Drop Engine] Applying cinematic frequency drops at: {drop_times}")
+        music_audio = apply_sound_drop_ducking(music_audio, drop_times)
+        
     final_audio = CompositeAudioClip([voice_audio, music_audio])
     return final_audio, voice_audio
 
@@ -999,8 +1102,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             download_free_soundtrack(track_tag)
             bg_music_path = os.path.join(DEFAULT_DIR, f"music_{track_tag}.mp3")
             
-    if progress_cb: progress_cb(0.30, "Combining vocal tracks, ducking volume, and mixing soundtracks...")
-    mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume)
+    voice_audio = AudioFileClip(audio_path)
     duration = voice_audio.duration
     
     # Upgrade: Adaptive Kinetic Pacing (Variable Attention Splitting)
@@ -1025,6 +1127,33 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         idx_pac += 1
         
     num_cuts = len(scene_boundaries)
+    
+    # Upgrade: Parse and Schedule Psychological tags dynamically from script draft lines!
+    # Strip bracket lines like [HOOK] during parsing
+    script_lines = [l.strip() for l in script_text.split('\n') if l.strip() and not (l.strip().startswith('[') and l.strip().endswith(']'))]
+    
+    drop_times = []
+    meme_overlays = []
+    
+    # Always drop music volume at the crucial Hook-to-Value transition!
+    if len(scene_boundaries) > 0:
+        drop_times.append(scene_boundaries[0][1])
+        
+    for idx_line, line in enumerate(script_lines):
+        if idx_line < len(scene_boundaries):
+            start_t, end_t = scene_boundaries[idx_line]
+            
+            if "[SOUND_DROP]" in line:
+                drop_times.append(start_t)
+                
+            meme_match = re.search(r'\[MICRO_MEME:\s*(.*?)\]', line, re.IGNORECASE)
+            if meme_match:
+                meme_type = meme_match.group(1).strip()
+                meme_overlays.append((start_t, meme_type))
+                
+    if progress_cb: progress_cb(0.30, "Combining vocal tracks, ducking volume, and mixing soundtracks with dynamic Sound Drops...")
+    mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume, drop_times=drop_times)
+    
     progress_cb_step_weight = 0.40 / num_cuts
     visual_clips = []
     transition_audio_clips = []
@@ -1186,10 +1315,34 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 
     if meme_sfx_path and os.path.exists(meme_sfx_path):
         try:
-            sfx_clip = AudioFileClip(meme_sfx_path).with_start(cut_duration).with_volume_scaled(0.18)
+            sfx_clip = AudioFileClip(meme_sfx_path).with_start(scene_boundaries[0][1] if len(scene_boundaries) > 0 else 2.0).with_volume_scaled(0.18)
             transition_audio_clips.append(sfx_clip)
         except Exception as e:
             print(f"Failed mixing meme SFX: {e}")
+            
+    # Upgrade: Dynamic Micro-Meme Overlay Sticker Injector!
+    for start_t, meme_type in meme_overlays:
+        try:
+            if start_t < duration:
+                if progress_cb: progress_cb(0.70, f"Integrating dynamic micro-meme Reaction overlay for '{meme_type.upper()}'...")
+                meme_badge = make_micro_meme_sticker(meme_type)
+                meme_dur = min(1.2, duration - start_t)
+                meme_clip = ImageClip(np.array(meme_badge)).with_start(start_t).with_duration(meme_dur).with_position(("center", 780))
+                visual_clips.append(meme_clip)
+                try:
+                    pop_sfx = AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume * 1.5)
+                    transition_audio_clips.append(pop_sfx)
+                except:
+                    pass
+        except Exception as e:
+            print(f"Failed overlaying micro-meme sticker: {e}")
+            
+    # Upgrade: Cinematic Vignette Edge-Shading Overlay (Eye Funnel Mask)
+    try:
+        vignette_mask = make_vignette_overlay(duration)
+        visual_clips.append(vignette_mask)
+    except Exception as e:
+        print(f"Failed applying cinematic vignette mask: {e}")
             
     raw_bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
     

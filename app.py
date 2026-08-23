@@ -215,9 +215,9 @@ def auto_generate_script_local(topic, style_choice):
         ]
         value_delivery = """[VALUE DELIVERY]
 Here is the raw relationship shift:
-1. The Core Shift: Shift from passive attraction to deep presence.
-2. The Intimacy Loop: Lock in undivided, focused attention for 30 minutes every single night.
-3. Emotional Safety: Create a space of absolute trust first. Raw chemistry isn't about physical traits—it's about feeling safe to connect."""
+1. The Core Shift [SOUND_DROP]: Shift from passive attraction to deep presence.
+2. The Intimacy Loop: Lock in undivided, focused attention for 30 minutes every single night [MICRO_MEME: romantic_focus].
+3. Emotional Safety [SOUND_DROP]: Create a space of absolute trust first. Raw chemistry isn't about physical traits—it's about feeling safe to connect [MICRO_MEME: chemistry_secret]."""
         cta = "[Save this video so you don't lose it + Follow for daily elite frameworks ❤️]"
         
     elif "Dramatic" in style_choice:
@@ -230,9 +230,9 @@ Here is the raw relationship shift:
         ]
         value_delivery = """[VALUE DELIVERY]
 Here is the exact neuroscience breakdown:
-1. Cognitive Overload: Intelligent brains analyze too many variables, causing micro-friction.
+1. Cognitive Overload [SOUND_DROP]: Intelligent brains analyze too many variables, causing micro-friction [MICRO_MEME: brain_overload].
 2. The Action Boundary: To stop overthinking, establish a strict 20-minute daily execution sprint.
-3. Habit Automation: Automate your morning ritual so your prefrontal cortex never has to choose. Eliminate cognitive friction to build unshakeable momentum."""
+3. Habit Automation [SOUND_DROP]: Automate your morning ritual so your prefrontal cortex never has to choose. Eliminate cognitive friction to build unshakeable momentum [MICRO_MEME: infinite_grit]."""
         cta = "[Save this video so you don't lose it + Follow for daily elite frameworks 📈]"
         
     elif "Motivational" in style_choice:
@@ -245,9 +245,9 @@ Here is the exact neuroscience breakdown:
         ]
         value_delivery = """[VALUE DELIVERY]
 Here is the elite performance strategy:
-1. Mindset Shift: Drop the amateur reliance on motivation.
-2. The 20-Minute Focus Rule: Lock yourself in a room with zero devices and write.
-3. Deep Execution Sprint: Lock in for 90 minutes of deep work every morning before scrolling."""
+1. Mindset Shift [SOUND_DROP]: Drop the amateur reliance on motivation.
+2. The 20-Minute Focus Rule: Lock yourself in a room with zero devices and write [MICRO_MEME: extreme_focus].
+3. Deep Execution Sprint [SOUND_DROP]: Lock in for 90 minutes of deep work every morning before scrolling [MICRO_MEME: success_grind]."""
         cta = "[Drop a 🔥 in the comments if you are executing this today!]"
         
     else:
@@ -260,9 +260,9 @@ Here is the elite performance strategy:
         ]
         value_delivery = """[VALUE DELIVERY]
 Stop throwing away your focus:
-1. Friction Point: Your phone is a slot machine stealing your attention span.
-2. The dopamine drain: Every cheap scroll reduces your brain's capacity for deep work.
-3. The instant shift: Move your phone to another room before you start your morning routine."""
+1. Friction Point [SOUND_DROP]: Your phone is a slot machine stealing your attention span.
+2. The dopamine drain: Every cheap scroll reduces your brain's capacity for deep work [MICRO_MEME: dopamine_drain].
+3. The instant shift [SOUND_DROP]: Move your phone to another room before you start your morning routine [MICRO_MEME: phone_lock]."""
         cta = "[Save this video so you don't lose it + Follow for daily elite frameworks 📈]"
         
     selected_hook = random.choice(hooks)
