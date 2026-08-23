@@ -644,26 +644,66 @@ def make_micro_meme_sticker(meme_type):
     draw.text((text_x, text_y), text, fill=(255, 215, 0, 255), font=font)
     return img
 
+# --- PROCEDURAL HIGH-DENSITY SAVE TRIGGER CARD ---
+def make_save_trigger_card(points_text, duration):
+    width, height = 580, 480
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    # Rounded dark box with golden border
+    draw.rounded_rectangle(
+        [(15, 15), (width - 15, height - 15)],
+        radius=30,
+        fill=(15, 23, 42, 245), # iOS Navy Dark
+        outline=(255, 215, 0, 255), # Gold
+        width=5
+    )
+    
+    # Title
+    from PIL import ImageFont
+    try: font_title = ImageFont.load_default(size=28)
+    except: font_title = ImageFont.load_default()
+    
+    draw.text((45, 45), "⚠️ SAVE TO LOCK MOMENTUM", fill=(255, 215, 0, 255), font=font_title)
+    
+    # Parse points
+    points = [p.strip() for p in points_text.split('|')]
+    try: font_body = ImageFont.load_default(size=22)
+    except: font_body = ImageFont.load_default()
+    
+    y_offset = 120
+    for idx, pt in enumerate(points[:3]):
+        # Bullet point text
+        draw.text((50, y_offset), f"{idx+1}. {pt}", fill=(255, 255, 255, 255), font=font_body)
+        y_offset += 100
+        
+    img_arr = np.array(img)
+    return ImageClip(img_arr).with_duration(duration)
+
 # --- DRAMATIC COGNITIVE SOUND DROP ENGINE ---
 def apply_sound_drop_ducking(music_clip, drop_times):
     if not drop_times:
         return music_clip
         
     def volume_filter(t):
-        try:
-            # Handle array inputs safely
+        if isinstance(t, np.ndarray):
             mask = np.ones_like(t, dtype=float)
             for dt in drop_times:
                 mask[(t >= dt) & (t <= dt + 0.4)] = 0.08
-            return mask
-        except:
-            # Handle scalar fallback
+            return np.expand_dims(mask, axis=-1)
+        else:
             for dt in drop_times:
                 if dt <= t <= dt + 0.4:
                     return 0.08
             return 1.0
             
-    return music_clip.fl(lambda gf, t: gf(t) * volume_filter(t))
+    orig_make_frame = music_clip.make_frame
+    def new_make_frame(t):
+        frames = orig_make_frame(t)
+        return frames * volume_filter(t)
+        
+    music_clip.make_frame = new_make_frame
+    return music_clip
 
 # --- SPEECH CLEANER ---
 def clean_script_for_speech(script_text):
@@ -1134,6 +1174,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     
     drop_times = []
     meme_overlays = []
+    save_trigger_overlays = []
     
     # Always drop music volume at the crucial Hook-to-Value transition!
     if len(scene_boundaries) > 0:
@@ -1150,6 +1191,11 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             if meme_match:
                 meme_type = meme_match.group(1).strip()
                 meme_overlays.append((start_t, meme_type))
+                
+            save_match = re.search(r'\[SAVE_TRIGGER_LIST:\s*(.*?)\]', line, re.IGNORECASE)
+            if save_match:
+                points_text = save_match.group(1).strip()
+                save_trigger_overlays.append((start_t, points_text))
                 
     if progress_cb: progress_cb(0.30, "Combining vocal tracks, ducking volume, and mixing soundtracks with dynamic Sound Drops...")
     mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume, drop_times=drop_times)
@@ -1336,6 +1382,22 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                     pass
         except Exception as e:
             print(f"Failed overlaying micro-meme sticker: {e}")
+            
+    # Upgrade: Dynamic High-Density Save Trigger Infographics Card Injector!
+    for start_t, points_text in save_trigger_overlays:
+        try:
+            if start_t < duration:
+                if progress_cb: progress_cb(0.71, "Integrating dynamic high-density Save-Trigger infographic overlay...")
+                save_card = make_save_trigger_card(points_text, duration=1.5)
+                save_clip = save_card.with_start(start_t).with_position(("center", "center"))
+                visual_clips.append(save_clip)
+                try:
+                    chime_sfx = AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume * 1.8)
+                    transition_audio_clips.append(chime_sfx)
+                except:
+                    pass
+        except Exception as e:
+            print(f"Failed overlaying Save-Trigger card: {e}")
             
     # Upgrade: Cinematic Vignette Edge-Shading Overlay (Eye Funnel Mask)
     try:

@@ -215,9 +215,10 @@ def auto_generate_script_local(topic, style_choice):
         ]
         value_delivery = """[VALUE DELIVERY]
 Here is the raw relationship shift:
-1. The Core Shift [SOUND_DROP]: Shift from passive attraction to deep presence.
-2. The Intimacy Loop: Lock in undivided, focused attention for 30 minutes every single night [MICRO_MEME: romantic_focus].
-3. Emotional Safety [SOUND_DROP]: Create a space of absolute trust first. Raw chemistry isn't about physical traits—it's about feeling safe to connect [MICRO_MEME: chemistry_secret]."""
+You chase temporary physical traits, BUT raw chemistry is about emotional safety, THEREFORE passive attraction fails [SOUND_DROP].
+That is mistake number one. The second one is ten times worse [MICRO_MEME: romantic_focus].
+Lock in undivided, focused attention for 30 minutes every single night.
+[SAVE_TRIGGER_LIST: 1. Deep Presence | 2. 30m Intimacy Loop | 3. Absolute Trust]"""
         cta = "[Save this video so you don't lose it + Follow for daily elite frameworks ❤️]"
         
     elif "Dramatic" in style_choice:
@@ -230,9 +231,10 @@ Here is the raw relationship shift:
         ]
         value_delivery = """[VALUE DELIVERY]
 Here is the exact neuroscience breakdown:
-1. Cognitive Overload [SOUND_DROP]: Intelligent brains analyze too many variables, causing micro-friction [MICRO_MEME: brain_overload].
-2. The Action Boundary: To stop overthinking, establish a strict 20-minute daily execution sprint.
-3. Habit Automation [SOUND_DROP]: Automate your morning ritual so your prefrontal cortex never has to choose. Eliminate cognitive friction to build unshakeable momentum [MICRO_MEME: infinite_grit]."""
+You analyze too many variables, BUT this creates micro-friction, THEREFORE your prefrontal cortex shuts down [SOUND_DROP].
+That is mistake number one. The second one is ten times worse [MICRO_MEME: brain_overload].
+To stop overthinking, establish a strict 20-minute daily execution sprint.
+[SAVE_TRIGGER_LIST: 1. Reduce Choice | 2. 20m Daily Sprint | 3. Morning Automation]"""
         cta = "[Save this video so you don't lose it + Follow for daily elite frameworks 📈]"
         
     elif "Motivational" in style_choice:
@@ -245,9 +247,10 @@ Here is the exact neuroscience breakdown:
         ]
         value_delivery = """[VALUE DELIVERY]
 Here is the elite performance strategy:
-1. Mindset Shift [SOUND_DROP]: Drop the amateur reliance on motivation.
-2. The 20-Minute Focus Rule: Lock yourself in a room with zero devices and write [MICRO_MEME: extreme_focus].
-3. Deep Execution Sprint [SOUND_DROP]: Lock in for 90 minutes of deep work every morning before scrolling [MICRO_MEME: success_grind]."""
+Amateurs wait for motivation, BUT motivation is a fluctuating emotion, THEREFORE execution flatlines [SOUND_DROP].
+That is mistake number one. The second one is ten times worse [MICRO_MEME: extreme_focus].
+Lock yourself in a room with zero devices and write for 90 minutes.
+[SAVE_TRIGGER_LIST: 1. Reject Motivation | 2. 90m Focus Lock | 3. Zero-Device Sprints]"""
         cta = "[Drop a 🔥 in the comments if you are executing this today!]"
         
     else:
@@ -260,9 +263,10 @@ Here is the elite performance strategy:
         ]
         value_delivery = """[VALUE DELIVERY]
 Stop throwing away your focus:
-1. Friction Point [SOUND_DROP]: Your phone is a slot machine stealing your attention span.
-2. The dopamine drain: Every cheap scroll reduces your brain's capacity for deep work [MICRO_MEME: dopamine_drain].
-3. The instant shift [SOUND_DROP]: Move your phone to another room before you start your morning routine [MICRO_MEME: phone_lock]."""
+Your phone is a slot machine, BUT every cheap scroll drains your dopamine, THEREFORE your attention span drops to zero [SOUND_DROP].
+That is mistake number one. The second one is ten times worse [MICRO_MEME: dopamine_drain].
+Move your phone to another room before you start your morning routine.
+[SAVE_TRIGGER_LIST: 1. Phone is Slot Machine | 2. Dopamine Exhaustion | 3. Morning Phone Quarantine]"""
         cta = "[Save this video so you don't lose it + Follow for daily elite frameworks 📈]"
         
     selected_hook = random.choice(hooks)
