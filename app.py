@@ -269,7 +269,10 @@ Stop throwing away your focus:
     custom_hook = selected_hook.replace("[Topic]", topic).replace("[Niche]", topic).replace("[Role/Niche]", "performer").replace("[Role/Goal]", "leader").replace("[Bad Habit/Mistake]", "wasting focus").replace("[Money/Time/Health]", "focus")
     custom_hook = custom_hook.replace("[X]", "intelligence").replace("[Y]", "consistency").replace("[Key Strategy]", "Habit Automation")
     
-    full_script = f"""[0-3 sec HOOK]\n{custom_hook}\n\n[PSYCHOLOGY TRIGGER: {hook_category}]\n{trigger_desc}\n\n{value_delivery}\n\n[ENGAGEMENT CTA]\n{cta}"""
+    # Force clean, highly optimized infinite loop structures for max watch time metrics!
+    first_word = custom_hook.split()[0].replace(".", "").replace(",", "").replace("?", "").replace("!", "").strip().lower()
+    
+    full_script = f"""[0-3 sec HOOK]\n{custom_hook}\n\n[PSYCHOLOGY TRIGGER: {hook_category}]\n{trigger_desc}\n\n{value_delivery} and that is because...\n\n[ENGAGEMENT CTA]\n{cta}"""
     title = f"{custom_hook[:45]}..." if len(custom_hook) > 45 else custom_hook
     tags = f"{topic.lower().replace(' ', '')}, shorts, viral, psychology, {hook_category.lower().replace(' ', '')}"
     
