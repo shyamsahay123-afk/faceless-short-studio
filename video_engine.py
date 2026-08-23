@@ -614,6 +614,38 @@ def make_vignette_overlay(duration):
     img_arr = np.array(img)
     return ImageClip(img_arr).with_duration(duration)
 
+# --- DYNAMIC LIGHT LEAK TRANSITION FLASHES ---
+def make_light_leak_flash(start_t, duration=0.25):
+    width, height = 720, 1280
+    # Generate transparent overlay with massive soft glowing warm orange center
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    cx, cy = width // 2, height // 2
+    draw.ellipse([cx - 400, cy - 400, cx + 400, cy + 400], fill=(255, 130, 0, 95))
+    img_arr = np.array(img)
+    
+    clip = ImageClip(img_arr).with_start(start_t).with_duration(duration)
+    # Ramps opacity up and down smoothly during the 0.25s flash
+    return clip.fl(lambda gf, t: gf(t) * (np.sin(t * (np.pi / duration)) if t <= duration else 0.0))
+
+# --- GENERATE CONTINUOUS DEEP SUB-BASS ATMOSPHERIC HUM (STANDARD LIBRARY WAV GENERATOR) ---
+def generate_sub_bass_wav(path, duration, frequency=40, sample_rate=44100):
+    import wave
+    import struct
+    
+    num_samples = int(duration * sample_rate)
+    with wave.open(path, 'wb') as wav:
+        # Stereo (2 channels), 16-bit (2 bytes per sample), sample_rate
+        wav.setparams((2, 2, sample_rate, num_samples, 'NONE', 'not compressed'))
+        
+        frames = []
+        for i in range(num_samples):
+            t = float(i) / sample_rate
+            val = int(32767 * np.sin(2 * np.pi * frequency * t))
+            frames.append(struct.pack('<hh', val, val))
+            
+        wav.writeframes(b''.join(frames))
+
 # --- DYNAMIC MICRO-MEME STICKER OVERLAY ---
 def make_micro_meme_sticker(meme_type):
     width, height = 440, 110
@@ -697,13 +729,18 @@ def apply_sound_drop_ducking(music_clip, drop_times):
                     return 0.08
             return 1.0
             
-    orig_make_frame = music_clip.make_frame
-    def new_make_frame(t):
-        frames = orig_make_frame(t)
-        return frames * volume_filter(t)
-        
-    music_clip.make_frame = new_make_frame
-    return music_clip
+    # Ultimate Cross-Version Compatibility (supports MoviePy 1.x, MoviePy 2.x, and custom subclasses!)
+    if hasattr(music_clip, "transform"):
+        return music_clip.transform(lambda gf, t: gf(t) * volume_filter(t))
+    elif hasattr(music_clip, "fl"):
+        return music_clip.fl(lambda gf, t: gf(t) * volume_filter(t))
+    else:
+        orig_get_frame = music_clip.get_frame
+        def new_get_frame(t):
+            frames = orig_get_frame(t)
+            return frames * volume_filter(t)
+        music_clip.get_frame = new_get_frame
+        return music_clip
 
 # --- SPEECH CLEANER ---
 def clean_script_for_speech(script_text):
@@ -1032,7 +1069,7 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
             
         txt_clip = TextClip(
             text=txt, 
-            font="Arial", 
+            font="Georgia", 
             font_size=word_size, 
             color=word_color, 
             stroke_color=stroke_color, 
@@ -1044,7 +1081,8 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
         
         try:
             if "minimalist" not in caption_theme:
-                bouncy_txt_clip = txt_clip.resized(lambda t: min(1.0, 0.85 + (0.15 / 0.07) * t) if t < 0.07 else 1.0)
+                # Upgraded: High-fidelity organic spring bounce scales from 0.85 up to 1.12, then settles smoothly to 1.0!
+                bouncy_txt_clip = txt_clip.resized(lambda t: (0.85 + 0.27 * np.sin(t * (np.pi / 0.15))) if t < 0.15 else 1.0)
             else:
                 bouncy_txt_clip = txt_clip
         except:
@@ -1093,7 +1131,16 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
         print(f"[Sound Drop Engine] Applying cinematic frequency drops at: {drop_times}")
         music_audio = apply_sound_drop_ducking(music_audio, drop_times)
         
-    final_audio = CompositeAudioClip([voice_audio, music_audio])
+    # Upgrade: Mix a continuous deep sub-bass atmospheric hum (40Hz) to create spherical auditory depth!
+    sub_bass_path = os.path.join(AUDIO_DIR, "temp_sub_bass_40hz.wav")
+    try:
+        generate_sub_bass_wav(sub_bass_path, duration=duration, frequency=40)
+        sub_bass_audio = AudioFileClip(sub_bass_path).with_volume_scaled(0.045)
+        final_audio = CompositeAudioClip([voice_audio, music_audio, sub_bass_audio])
+    except Exception as e:
+        print(f"[Warning] Failed creating sub-bass hum: {e}")
+        final_audio = CompositeAudioClip([voice_audio, music_audio])
+        
     return final_audio, voice_audio
 
 
@@ -1354,10 +1401,16 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             
         if idx > 0:
             try:
-                whoosh_clip = AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume)
+                # Upgraded: J-Cut transition whoosh (starts 0.25s before visual cut!)
+                j_cut_start = max(0.0, start_t - 0.25)
+                whoosh_clip = AudioFileClip(whoosh_path).with_start(j_cut_start).with_volume_scaled(db_whoosh_volume)
                 transition_audio_clips.append(whoosh_clip)
-            except:
-                pass
+                
+                # Upgraded: Cinematic Light-Leak Flash transition visual overlay!
+                flash_clip = make_light_leak_flash(start_t, duration=0.25)
+                visual_clips.append(flash_clip)
+            except Exception as e:
+                print(f"Failed rendering J-cut transition layers: {e}")
                 
     if meme_sfx_path and os.path.exists(meme_sfx_path):
         try:
@@ -1417,8 +1470,10 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     caption_style = kwargs.get("caption_style", db_caption_style)
     text_clips, sfx_clips = build_subtitle_and_sfx_clips(parse_vtt(vtt_path), color=font_color, caption_style=caption_style, font_size=db_font_size)
     
-    if sfx_clips:
-        mixed_audio = CompositeAudioClip([mixed_audio] + sfx_clips)
+    # Mix all sound design elements (subtitles pop clicks + transition whooshes + meme triggers) into the main audio track!
+    all_sfx = sfx_clips + transition_audio_clips
+    if all_sfx:
+        mixed_audio = CompositeAudioClip([mixed_audio] + all_sfx)
         
     bg_clip = bg_clip.with_audio(mixed_audio)
     
