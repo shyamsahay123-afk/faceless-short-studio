@@ -552,24 +552,24 @@ def build_retention_overlays(duration):
     overlays = []
     
     # 1. THE HOOK ALERT (Pops up at 0.3s for 1.4s)
-    hook_badge = make_high_impact_badge("🚨 DO NOT SCROLL", color_bg=(255, 59, 48, 240))
+    hook_badge = make_high_impact_badge("SYSTEM ALERT: DO NOT SCROLL", color_bg=(255, 59, 48, 240))
     hook_clip = ImageClip(np.array(hook_badge)).with_start(0.3).with_duration(1.4).with_position(("center", 240))
     overlays.append(hook_clip)
     
     # 2. CURIOSITY TRIGGER (Pops up around 4.5s for 1.3s)
-    curiosity_badge = make_high_impact_badge("🧠 CURIOSITY LOOP OPEN", color_bg=(255, 149, 0, 240)) # Neon Orange
+    curiosity_badge = make_high_impact_badge("COGNITIVE LOOP: ACTIVE", color_bg=(255, 149, 0, 240)) # Neon Orange
     curiosity_clip = ImageClip(np.array(curiosity_badge)).with_start(4.5).with_duration(1.3).with_position(("center", 240))
     overlays.append(curiosity_clip)
     
     # 3. VALUE PROOF (Pops up around 11s for 1.2s)
-    proof_badge = make_high_impact_badge("💡 SECRET FORMULA EXPOSED", color_bg=(52, 199, 89, 240)) # Green
+    proof_badge = make_high_impact_badge("SECRET STRATEGY EXPOSED", color_bg=(52, 199, 89, 240)) # Green
     proof_clip = ImageClip(np.array(proof_badge)).with_start(11.0).with_duration(1.2).with_position(("center", 240))
     overlays.append(proof_clip)
     
     # 4. INFINITE LOOP REWATCH TRIGGER (Pops up in the last 1.8 seconds of the video)
     if duration > 5.0:
         loop_start = duration - 1.8
-        loop_badge = make_high_impact_badge("🔄 DETECTING LOOP BREAK", color_bg=(142, 68, 173, 245)) # Deep Purple
+        loop_badge = make_high_impact_badge("INFINITE LOOP: TIMELINE BIND", color_bg=(142, 68, 173, 245)) # Deep Purple
         loop_clip = ImageClip(np.array(loop_badge)).with_start(loop_start).with_duration(1.8).with_position(("center", 240))
         overlays.append(loop_clip)
         
