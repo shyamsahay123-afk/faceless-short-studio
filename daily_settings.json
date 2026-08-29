@@ -1,0 +1,13 @@
+{
+  "topic_style": "Dramatic",
+  "caption_style": "hormozi",
+  "bg_style": "grid",
+  "accent": "yellow",
+  "clip_mode": "blend",
+  "b_roll_source": "pexels",
+  "voice_preset": "Deep Narrator Male",
+  "music_volume": 0.09,
+  "sfx_level": 0.7,
+  "videos_repo": "shyamsahay123-afk/videos",
+  "hook_min_score": 60
+}

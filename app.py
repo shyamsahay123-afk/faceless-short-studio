@@ -215,88 +215,9 @@ def fetch_trending_shorts_concepts():
         pass
     return list(set(base_trends))[:5]
 
-# --- Standalone AI Script Draft Generator (UNCENSORED ROMANCE & RELATIONSHIPS PRESETS) ---
-def auto_generate_script_local(topic, style_choice):
-    topic_lower = str(topic).lower()
-    if any(k in topic_lower for k in ["bomb", "terror", "explosive", "weapon", "child abuse", "abuse", "murder"]):
-        return "Safety Warning", "[SCRIPT BLOCKED] For personal and algorithmic safety, content involving explosives, terrorism, or severe violence cannot be compiled. Please choose another creative topic!", "safety, warning", "Safety Block"
-        
-    if "Romance" in style_choice or "Intimacy" in style_choice:
-        hook_category = "Romance & Intimacy"
-        trigger_desc = "Connect directly with core emotional desires, chemistry secrets, and deep intimacy loops."
-        hooks = [
-            "9 out of 10 people understand this backwards. Here is the raw truth about [Topic] that nobody says out loud.",
-            "There is a hidden rule of [Topic] the top 1% never break. It takes 30 minutes a night.",
-            "What is the silent signal your brain sends when real chemistry starts? Psychologists have a name for it: [Topic].",
-        ]
-        value_delivery = """[VALUE DELIVERY]
-Here is the raw relationship shift:
-You chase temporary physical traits, BUT raw chemistry is about emotional safety, THEREFORE passive attraction fails [SOUND_DROP].
-That is mistake number one. The second one is ten times worse [MICRO_MEME: romantic_focus].
-Lock in undivided, focused attention for 30 minutes every single night.
-[SAVE_TRIGGER_LIST: 1. Deep Presence | 2. 30m Intimacy Loop | 3. Absolute Trust]"""
-        cta = "[Save this video so you don't lose it + Follow for daily elite frameworks ❤️]"
-        
-    elif "Dramatic" in style_choice:
-        hook_category = "Curiosity Gap"
-        trigger_desc = "Create an open loop in the first 2 seconds that makes the brain demand closure."
-        hooks = [
-            "99% of people get this entirely wrong. Here is the exact truth nobody talks about: [Topic].",
-            "There is a hidden pattern behind [Topic] that intelligent people use before 6 AM. It takes only 20 minutes.",
-            "What is the most dangerous habit your brain runs on? Scientists have a name for it. It starts with [Topic].",
-        ]
-        value_delivery = """[VALUE DELIVERY]
-Here is the exact neuroscience breakdown:
-You analyze too many variables, BUT this creates micro-friction, THEREFORE your prefrontal cortex shuts down [SOUND_DROP].
-That is mistake number one. The second one is ten times worse [MICRO_MEME: brain_overload].
-To stop overthinking, establish a strict 20-minute daily execution sprint.
-[SAVE_TRIGGER_LIST: 1. Reduce Choice | 2. 20m Daily Sprint | 3. Morning Automation]"""
-        cta = "[Save this video so you don't lose it + Follow for daily elite frameworks 📈]"
-        
-    elif "Motivational" in style_choice:
-        hook_category = "Identity Signaling"
-        trigger_desc = "Make the viewer feel they belong to a higher-status group (smart, disciplined, successful)."
-        hooks = [
-            "Only 1 in 100 people do this every single day. Here is the exact system: [Topic].",
-            "Intelligent people don't rely on motivation. They use this hidden 20-minute rule instead.",
-            "What separates the top 1% from everyone else? It's not talent. It's this one [Topic] system.",
-        ]
-        value_delivery = """[VALUE DELIVERY]
-Here is the elite performance strategy:
-Amateurs wait for motivation, BUT motivation is a fluctuating emotion, THEREFORE execution flatlines [SOUND_DROP].
-That is mistake number one. The second one is ten times worse [MICRO_MEME: extreme_focus].
-Lock yourself in a room with zero devices and write for 90 minutes.
-[SAVE_TRIGGER_LIST: 1. Reject Motivation | 2. 90m Focus Lock | 3. Zero-Device Sprints]"""
-        cta = "[Drop a 🔥 in the comments if you are executing this today!]"
-        
-    else:
-        hook_category = "Loss Aversion"
-        trigger_desc = "Highlight what the viewer will lose if they don’t act."
-        hooks = [
-            "You are losing 2 hours a day to this. Here is the exact fix nobody teaches you: [Topic].",
-            "99% of people stay stuck because of one hidden trap. It's called [Topic] — and it's fixable in 3 steps.",
-            "Every day you ignore this, your brain gets 1% weaker. The exact reason: [Topic].",
-        ]
-        value_delivery = """[VALUE DELIVERY]
-Stop throwing away your focus:
-Your phone is a slot machine, BUT every cheap scroll drains your dopamine, THEREFORE your attention span drops to zero [SOUND_DROP].
-That is mistake number one. The second one is ten times worse [MICRO_MEME: dopamine_drain].
-Move your phone to another room before you start your morning routine.
-[SAVE_TRIGGER_LIST: 1. Phone is Slot Machine | 2. Dopamine Exhaustion | 3. Morning Phone Quarantine]"""
-        cta = "[Save this video so you don't lose it + Follow for daily elite frameworks 📈]"
-        
-    selected_hook = random.choice(hooks)
-    custom_hook = selected_hook.replace("[Topic]", topic).replace("[Niche]", topic).replace("[Role/Niche]", "performer").replace("[Role/Goal]", "leader").replace("[Bad Habit/Mistake]", "wasting focus").replace("[Money/Time/Health]", "focus")
-    custom_hook = custom_hook.replace("[X]", "intelligence").replace("[Y]", "consistency").replace("[Key Strategy]", "Habit Automation")
-    
-    # Force clean, highly optimized infinite loop structures for max watch time metrics!
-    first_word = custom_hook.split()[0].replace(".", "").replace(",", "").replace("?", "").replace("!", "").strip().lower()
-    
-    full_script = f"""[0-3 sec HOOK]\n{custom_hook}\n\n[PSYCHOLOGY TRIGGER: {hook_category}]\n{trigger_desc}\n\n{value_delivery} and that is because...\n\n[ENGAGEMENT CTA]\n{cta}"""
-    title = f"{custom_hook[:45]}..." if len(custom_hook) > 45 else custom_hook
-    tags = f"{topic.lower().replace(' ', '')}, shorts, viral, psychology, {hook_category.lower().replace(' ', '')}"
-    
-    return title, full_script, tags, hook_category
+# --- Standalone AI Script Draft Generator (now in script_engine.py so the
+# daily.py CLI autopilot can import it without starting Streamlit) ---
+from script_engine import auto_generate_script_local, score_hook, best_hook_line, generate_script_with_score
 
 # ==============================================================================
 # DATABASE & SETTINGS INITIALIZATION
@@ -469,6 +390,46 @@ if 'active_script' in st.session_state:
     st.session_state['active_title'] = edited_title
     st.session_state['active_script'] = edited_script
 
+    # --- HOOK SCORECARD — pre-render quality gate (fix the hook BEFORE spending 2.5 min rendering) ---
+    _hook = best_hook_line(edited_script)
+    _hscore, _hchecks = score_hook(_hook)
+    _hicon = "🟢" if _hscore >= 75 else ("🟡" if _hscore >= 55 else "🔴")
+    _hfailed = [n for n, ok in _hchecks if not ok]
+    _hint = f"  <br><small style='color:#FF9500'>Fix: {', '.join(_hfailed[:3])}</small>" if _hfailed else "  <br><small style='color:#39FF14'>All checks passed — render-safe</small>"
+    st.markdown(f"**{_hicon} Hook Scorecard: {_hscore}/100** — <i>“{_hook[:80]}”</i>{_hint}", unsafe_allow_html=True)
+
+    # --- RETENTION RE-CUT — feed the app your viewers' real behavior ---
+    st.markdown("#### 📈 Retention Re-Cut (the app learns from your viewers)")
+    st.caption("YouTube Studio → your video → Analytics → 'Average Percentage of Viewers' → EXPORT (CSV). "
+               "The app finds where viewers drop and CUTS that sentence from the script. Re-render = shorter video, no dead zone.")
+    _ret_file = st.file_uploader("Retention CSV export", type=["csv"], key="retention_csv")
+    if _ret_file is not None and 'active_script' in st.session_state:
+        try:
+            import retention_engine as _ret
+            _curve = _ret.parse_retention_csv(_ret_file.getvalue().decode("utf-8-sig"))
+            _dips = _ret.find_retention_dips(_curve)
+            if _dips:
+                # word timings come from the last render's SRT (saved after each render)
+                _srt_path = st.session_state.get("last_render_srt", "")
+                _subs = video.parse_vtt(_srt_path) if _srt_path and os.path.exists(_srt_path) else []
+                st.markdown("**Detected viewer drop zones:**")
+                for _d in _dips:
+                    st.markdown(f"- ⚠️ **{_d['start']:.0f}s–{_d['end']:.0f}s** — retention fell **{_d['depth_pct']:.0f} pts** (to {_d['min_pct']:.0f}%)")
+                if _subs:
+                    if st.button("✂️ APPLY RE-CUT TO THIS SCRIPT", use_container_width=False):
+                        _new_script, _removed = _ret.recut_script_for_dips(edited_script, _subs, _dips)
+                        if _removed:
+                            st.session_state['active_script'] = _new_script
+                            st.rerun()
+                        else:
+                            st.warning("No whole sentence falls inside a drop zone — shorten the topic or split the video.")
+                else:
+                    st.info("Render this script once first (the app needs its word timings), then re-upload the CSV to auto-cut.")
+            else:
+                st.success("No significant drop zones found — the retention curve is flat. Keep this script.")
+        except Exception as _e:
+            st.error(f"Could not parse retention CSV: {_e}")
+
     # Calculate estimated cuts needed
     word_count = len(spoken_clean.split())
     duration_est = word_count / 2.5
@@ -504,9 +465,14 @@ st.subheader("🎛️ Step 3: Vocal & Styling Settings")
 col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
 
 # PIECE 7 — VOICE TONES (ElevenLabs V3 presets: human tone, not V1 robot)
-ai_voice_label = col_s1.selectbox("🔊 Narrator Voice (V3 Tones)", list(video.VOICE_PRESETS.keys()))
+# 🇮🇳 HINDI VARIANTS: same visual identity, new voice + Devanagari-safe captions.
+# (Write/paste the script in Hindi, pick a Hindi voice, render — done.)
+_HINDI_VOICES = ["🇮🇳 Hindi Male (Madhur)", "🇮🇳 Hindi Female (Swara)"]
+ai_voice_label = col_s1.selectbox("🔊 Narrator Voice (V3 Tones + Hindi)", list(video.VOICE_PRESETS.keys()) + _HINDI_VOICES)
 voice_code = {"Deep Narrator Male": "en-US-ChristopherNeural", "Energetic Male": "en-US-GuyNeural",
-              "Warm Female": "en-US-AriaNeural", "Calm British Female": "en-GB-SoniaNeural"}[ai_voice_label]
+              "Warm Female": "en-US-AriaNeural", "Calm British Female": "en-GB-SoniaNeural",
+              "🇮 Hindi Male (Madhur)": "hi-IN-MadhurNeural",
+              "🇮🇳 Hindi Female (Swara)": "hi-IN-SwaraNeural"}[ai_voice_label]
 
 pacing_label = col_s2.selectbox("⏱️ Video Pacing", [
     "⚡ Adrenaline ADHD (1.3s cuts)",
@@ -723,6 +689,8 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             )
             
             db.update_short_video(short_id, v_path, a_path, vtt_path, status='created')
+            st.session_state['last_render_srt'] = vtt_path  # enables Retention Re-Cut
+            st.session_state['last_render_video_name'] = os.path.basename(v_path)
             status_text.markdown("🤖 **AI Active:** Render complete! ... **100%**")
             
             st.success("🎉 Your AI video has been compiled flawlessly!"); st.balloons()
@@ -796,6 +764,8 @@ with st.expander("📦 Batch Mode — generate a week of videos in one run (asse
                     character_bible={"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
                                      "style_suffix": video.load_character_bible().get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")})
                 db.update_short_video(bid, bv, ba, bvtt, status='created')
+                st.session_state['last_render_srt'] = bvtt  # enables Retention Re-Cut
+                st.session_state['last_render_video_name'] = os.path.basename(bv)
                 batch_status.markdown(f"✅ **Batch {i+1} done:** {os.path.basename(bv)}")
                 # O2: force-free the frame buffers before the next batch video
                 # (5 videos in one process is what OOM-killed low-RAM hosts)
@@ -811,3 +781,41 @@ with st.expander("📦 Batch Mode — generate a week of videos in one run (asse
                 batch_status.error(f"❌ Batch {i+1} failed: {be}")
         if batch_results:
             st.success(f"🏭 BATCH COMPLETE — {len(batch_results)}/{len(batch_topics)} videos generated. All in Video Output.")
+
+# ------------------------------------------------------------------------------
+# PERFORMANCE LOG — feed it real numbers, the template LEARNS
+# ------------------------------------------------------------------------------
+st.divider()
+with st.expander("📊 Performance Log — the template that learns from your uploads", expanded=False):
+    st.caption("After each upload: YouTube Studio → your video → paste CTR / views / avg retention → Save. "
+               "The channel remembers which thumbnail variant won; the next render makes that variant the primary.")
+    _log = video.read_performance_log()
+    if _log:
+        _rows = list(_log.items())[-10:][::-1]
+        st.table({
+            "Date": [e.get("logged", "") for _n, e in _rows],
+            "Video": [str(e.get("title") or "")[:38] for _n, e in _rows],
+            "CTR %": [e.get("ctr", "") for _n, e in _rows],
+            "Views": [e.get("views", "") for _n, e in _rows],
+            "Avg Ret %": [e.get("avg_retention", "") for _n, e in _rows],
+            "Thumb #": [e.get("thumb_variant", 0) for _n, e in _rows],
+        })
+        _bv = video.best_thumb_variant()
+        st.success(f"🧠 Best-performing thumbnail variant so far: **#{_bv}** — it becomes the primary on the next render.")
+    _p1, _p2 = st.columns([3, 2])
+    with _p1:
+        _pv_name = st.text_input("Video file name (auto from last render)", value=st.session_state.get("last_render_video_name", ""))
+        _pv_title = st.text_input("Video title", value=st.session_state.get("active_title", ""))
+    with _p2:
+        _pc1, _pc2, _pc3, _pc4 = st.columns(4)
+        _p_ctr = _pc1.number_input("CTR %", min_value=0.0, max_value=100.0, step=0.1, format="%.1f")
+        _p_views = _pc2.number_input("Views", min_value=0, step=100, format="%d")
+        _p_ret = _pc3.number_input("Avg Ret %", min_value=0.0, max_value=100.0, step=1.0, format="%.0f")
+        _p_var = _pc4.number_input("Thumb # used", min_value=0, max_value=2, step=1, value=int(video.best_thumb_variant()))
+    if st.button("💾 Save Performance Entry", use_container_width=True):
+        if _pv_name and _p_ctr and _p_ctr > 0:
+            video.log_performance(_pv_name, _pv_title, ctr=_p_ctr, views=_p_views, avg_retention=_p_ret, thumb_variant=int(_p_var))
+            st.success("Logged. The template is learning.")
+            st.rerun()
+        else:
+            st.warning("Need at least the video name + a CTR > 0.")

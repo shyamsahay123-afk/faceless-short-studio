@@ -1,0 +1,8 @@
+# DAILY TOPIC QUEUE — one topic per line.
+# daily.py takes the FIRST line, renders it, and removes it (logged in done_log.txt).
+# Lines starting with # are ignored. Add as many as you like (1 per day).
+Why the top 1% study before 6 AM while everyone sleeps
+The 3 second rule that kills social anxiety instantly
+Why intelligent people never rely on motivation
+The hidden cost of saying yes to everything
+How a 20 minute execution sprint beats a 4 hour busy day

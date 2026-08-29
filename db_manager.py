@@ -1,7 +1,10 @@
 import sqlite3
 import os
 
-DB_NAME = 'shorts.db'
+# B8 follow-up: the DB must live next to the code, NOT in the working directory.
+# (daily.py / Task Scheduler can launch from any CWD — a relative path created
+# stray duplicate databases.)
+DB_NAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shorts.db')
 
 def get_connection():
     return sqlite3.connect(DB_NAME)

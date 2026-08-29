@@ -55,7 +55,11 @@ def get_font_path(size, bold=True):
     return None
 
 
-def get_pil_font(size, bold=True):
+def get_pil_font(size, bold=True, text=None):
+    # Devanagari/Hindi (and other non-Latin scripts) need a unicode font —
+    # Montserrat renders them as tofu boxes. Auto-switch per text (script-aware).
+    if text is not None and text_needs_unicode_font(text):
+        return _get_unicode_font(size, bold, text=text)
     path = get_font_path(size, bold)
     try:
         if path:
@@ -66,6 +70,61 @@ def get_pil_font(size, bold=True):
             return ImageFont.load_default()
         except Exception:
             return ImageFont.load_default()
+
+
+# anything outside basic Latin / Latin-ext / Greek / Cyrillic = needs a unicode font
+_NON_LATIN_RE = re.compile(r"[^\x00-\x7F\u00A0-\u024F\u0370-\u03FF\u0400-\u04FF]")
+_DEVANAGARI_RE = re.compile(r"[\u0900-\u097F]")
+
+
+def text_needs_unicode_font(text):
+    return bool(_NON_LATIN_RE.search(str(text or "")))
+
+
+def _is_devanagari(text):
+    return bool(_DEVANAGARI_RE.search(str(text or "")))
+
+
+def _unicode_font_paths(text, bold=True):
+    """Script-specific candidates.
+    Devanagari (Hindi): Noto Sans Devanagari (bundled) -> Windows Mangal -> DejaVu.
+    NOTE: DejaVu Sans has NO Devanagari glyphs — it would render tofu boxes.
+    Other non-Latin: DejaVu (bundled) -> system DejaVu."""
+    _d = os.path.dirname(os.path.abspath(__file__))
+    if _is_devanagari(text):
+        return [
+            os.path.join(_d, "fonts", "NotoSansDevanagari-Bold.ttf" if bold else "NotoSansDevanagari-Regular.ttf"),
+            r"C:\Windows\Fonts\mangal.ttf",   # Windows' built-in Devanagari font
+            os.path.join(_d, "fonts", "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"),
+        ]
+    return [
+        os.path.join(_d, "fonts", "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        r"C:\Windows\Fonts\mangal.ttf",
+    ]
+
+
+def _get_unicode_font(size, bold=True, text="द"):
+    for p in _unicode_font_paths(text, bold):
+        try:
+            if os.path.exists(p):
+                return ImageFont.truetype(p, size)
+        except Exception:
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def get_font_path_for_text(text, size, bold=True):
+    """Path-aware twin of get_pil_font (for callers that load the font themselves)."""
+    if text_needs_unicode_font(text):
+        for p in _unicode_font_paths(text, bold):
+            if os.path.exists(p):
+                return p
+        return None
+    return get_font_path(size, bold)
 
 
 # ------------------------------------------------------------------------------
@@ -125,7 +184,7 @@ def _measure_text(text, font, outline_width):
 
 def fit_font_size(text, font_size, max_width=660, outline_width=7):
     """Shrink font so the whole line fits in max_width (single line, never wraps)."""
-    font = get_pil_font(font_size, bold=True)
+    font = get_pil_font(font_size, bold=True, text=text)
     tw, _, _, _ = _measure_text(text, font, outline_width)
     tw += outline_width * 2 + 8
     if tw > max_width and len(text) > 2:
@@ -142,7 +201,7 @@ def render_text_image(text, font_size=80, color=(255, 255, 255),
     """Render ONE line of text with heavy outline (auto-shrinks to fit, never wraps)."""
     text = text.strip()
     font_size = fit_font_size(text, font_size, max_width, outline_width)
-    font = get_pil_font(font_size, bold=True)
+    font = get_pil_font(font_size, bold=True, text=text)
     tw, th, off_x, off_y = _measure_text(text, font, outline_width)
     tw += outline_width * 2 + 8
     th += outline_width * 2 + 8

@@ -1254,7 +1254,7 @@ def make_light_leak_flash(start_t, duration=0.25):
 # channel font/accent) = a 1280x720 thumbnail that looks like every other
 # thumbnail on the channel. "The template is a set of visual rules."
 # ==============================================================================
-def _finish_thumbnail(frame_path, out_path, hook_text, accent_rgb):
+def _finish_thumbnail(frame_path, out_path, hook_text, accent_rgb, text_y=60, bar="left"):
     """PIL body of the thumbnail (kept separate so the frame file has a
     guaranteed try/finally cleanup in generate_thumbnail)."""
     img = Image.open(frame_path).convert("RGBA")
@@ -1276,7 +1276,8 @@ def _finish_thumbnail(frame_path, out_path, hook_text, accent_rgb):
     font = None
     while size > 40:
         font = None
-        fp = se.get_font_path(size, bold=True) if se else None
+        # Devanagari-safe: Hindi/other scripts auto-route to a unicode font
+        fp = se.get_font_path_for_text(txt, size, bold=True) if se else None
         try:
             font = ImageFont.truetype(fp, size) if fp else ImageFont.load_default(size=size)
         except Exception:
@@ -1287,31 +1288,98 @@ def _finish_thumbnail(frame_path, out_path, hook_text, accent_rgb):
         size -= 4
     tw = d.textbbox((0, 0), txt, font=font, stroke_width=6)
     tw_w = tw[2] - tw[0]
-    d.text(((1280 - tw_w) // 2 - tw[0], 60 - tw[1]), txt, font=font,
+    d.text(((1280 - tw_w) // 2 - tw[0], text_y - tw[1]), txt, font=font,
            fill=tuple(accent_rgb) + (255,), stroke_width=6, stroke_fill=(0, 0, 0, 255))
-    # 4) small accent bar (locked channel signature mark)
-    d.rectangle([(60, 40), (68, 120)], fill=tuple(accent_rgb) + (255,))
+    # 4) signature mark (position varies per variant; A/B learns what clicks)
+    if bar == "left":
+        d.rectangle([(60, 40), (68, 120)], fill=tuple(accent_rgb) + (255,))
+    elif bar == "right":
+        d.rectangle([(1212, 40), (1220, 120)], fill=tuple(accent_rgb) + (255,))
     img.convert("RGB").save(out_path, quality=90)
     return out_path
 
 
-def generate_thumbnail(video_path, hook_text, accent_rgb=(255, 215, 0), out_path=None):
+# 3 variants so the channel can A/B what its audience clicks:
+#   frame time / text y / signature bar position
+THUMB_VARIANTS = {
+    0: {"frame_t": 1.0, "text_y": 60,  "bar": "left"},
+    1: {"frame_t": 2.5, "text_y": 95,  "bar": "right"},
+    2: {"frame_t": 0.5, "text_y": 125, "bar": "none"},
+}
+
+
+# ==============================================================================
+# PERFORMANCE LOG — the template that LEARNS.
+# The user pastes CTR/views from YouTube after each upload; the log remembers
+# which thumbnail variant won, and the next render's PRIMARY thumb defaults to
+# the best-performing variant. (No API needed — 20 seconds of manual data
+# entry beats a broken OAuth chain.)
+# ==============================================================================
+PERFORMANCE_LOG_PATH = os.path.join(BASE_DIR, "performance_log.json")
+
+
+def log_performance(video_basename, title, ctr=None, views=None, avg_retention=None, thumb_variant=0):
+    log = {}
+    if os.path.exists(PERFORMANCE_LOG_PATH):
+        try:
+            log = json.load(open(PERFORMANCE_LOG_PATH, "r", encoding="utf-8"))
+        except Exception:
+            log = {}
+    log[video_basename] = {
+        "title": str(title)[:120],
+        "ctr": ctr,
+        "views": views,
+        "avg_retention": avg_retention,
+        "thumb_variant": int(thumb_variant),
+        "logged": time.strftime("%Y-%m-%d"),
+    }
+    with open(PERFORMANCE_LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(log, f, indent=2, ensure_ascii=False)
+    return log
+
+
+def read_performance_log():
+    try:
+        return json.load(open(PERFORMANCE_LOG_PATH, "r", encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def best_thumb_variant():
+    """Variant with the best logged CTR (0 if nothing logged yet)."""
+    best_v, best_ctr = 0, -1.0
+    for entry in read_performance_log().values():
+        try:
+            c = float(entry.get("ctr") or 0)
+        except Exception:
+            continue
+        if c > best_ctr:
+            best_ctr, best_v = c, int(entry.get("thumb_variant", 0))
+    return best_v if best_ctr > 0 else 0
+
+
+def generate_thumbnail(video_path, hook_text, accent_rgb=(255, 215, 0), out_path=None, variant=0):
     try:
         try:
             import imageio_ffmpeg
             ff = imageio_ffmpeg.get_ffmpeg_exe()
         except Exception:
             ff = "ffmpeg"
+        vnum = int(variant) % 3
+        var = THUMB_VARIANTS[vnum]
         if out_path is None:
-            out_path = video_path.rsplit(".", 1)[0] + "_thumbnail.jpg"
-        frame_path = out_path.replace("_thumbnail.jpg", "_frame_tmp.jpg")
+            base = video_path.rsplit(".", 1)[0]
+            # variant 0 keeps the classic name; 1/2 get numbered sidecars
+            out_path = base + ("_thumbnail.jpg" if vnum == 0 else f"_thumbnail_{vnum + 1}.jpg")
+        frame_path = out_path.rsplit(".", 1)[0] + "_frame_tmp.jpg"
         subprocess.run(
-            [ff, "-y", "-loglevel", "error", "-ss", "1.0", "-i", video_path,
+            [ff, "-y", "-loglevel", "error", "-ss", f"{var['frame_t']:.1f}", "-i", video_path,
              "-frames:v", "1", "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720",
              frame_path], check=True, timeout=90,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
-            return _finish_thumbnail(frame_path, out_path, hook_text, accent_rgb)
+            return _finish_thumbnail(frame_path, out_path, hook_text, accent_rgb,
+                                     text_y=var["text_y"], bar=var["bar"])
         finally:
             _force_delete(frame_path)   # B5: temp frame removed even on crash
     except Exception as e:
@@ -1335,6 +1403,41 @@ def generate_sub_bass_wav(path, duration, frequency=40, sample_rate=44100):
             frames.append(struct.pack('<hh', val, val))
             
         wav.writeframes(b''.join(frames))
+
+# ==============================================================================
+# PIECE 13 — SIGNATURE STINGER (audio identity)
+# A fixed 0.5s stinger is mixed into EVERY video at 0.0s, same volume, same
+# waveform. Pro channels are recognized by SOUND before the first frame
+# resolves — this is the ear's version of the character bible (locked face).
+# Deterministic (fixed seed) = identical on every render, every machine.
+# ==============================================================================
+def generate_signature_stinger():
+    path = os.path.join(DEFAULT_DIR, "signature_stinger.wav")
+    if os.path.exists(path):
+        return path
+    sr = 44100
+    dur = 0.5
+    n = int(sr * dur)
+    t = np.arange(n) / sr
+    rng = np.random.default_rng(20260828)
+    # 1) deep impact sweep 90 -> 38 Hz (the "thud")
+    f_imp = 38 + 52 * np.exp(-9 * t)
+    imp = np.sin(2 * np.pi * np.cumsum(f_imp) / sr) * np.exp(-6.0 * t)
+    # 2) short bright shimmer 1800 -> 2600 Hz (the "ping", quiet)
+    f_sh = 1800 + 800 * (t / dur)
+    sh = np.sin(2 * np.pi * f_sh * t) * np.exp(-18 * t) * 0.12
+    # 3) 2ms attack click (gives the intro a crisp start)
+    click = rng.uniform(-1, 1, n) * np.exp(-t * 900) * 0.35
+    sig = imp * 0.85 + sh + click
+    sig = sig / max(1e-6, np.abs(sig).max()) * 0.9
+    import wave as _w
+    with _w.open(path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes((np.clip(sig, -1, 1) * 32767).astype(np.int16).tobytes())
+    return path
+
 
 # --- DYNAMIC MICRO-MEME STICKER OVERLAY ---
 def make_micro_meme_sticker(meme_type):
@@ -2016,6 +2119,10 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
         font_name = None
     if not font_name:
         font_name = "DejaVu Sans"
+    # Non-Latin (Hindi/Devanagari): the PIL render path handles it, but the
+    # TextClip fallback must also get a unicode font or it renders tofu boxes
+    if se is not None and display_subs and se.text_needs_unicode_font(display_subs[0]["text"]):
+        font_name = se.get_font_path_for_text(display_subs[0]["text"], actual_font_size, bold=True) or "DejaVu Sans"
 
     text_clips = []
     sfx_clips = []
@@ -2223,6 +2330,92 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
         final_audio = CompositeAudioClip([voice_audio, music_audio])
         
     return final_audio, voice_audio
+
+
+# ==============================================================================
+# QC REPORT — the 5-line verdict on the FINISHED file (you stop catching
+# bad renders by watching: the report tells you before you upload)
+# ==============================================================================
+def run_qc_report(video_path, srt_path=None):
+    report = []
+    try:
+        clip = VideoFileClip(video_path)
+        dur = clip.duration
+
+        # 1) duration — Shorts sweet spot
+        report.append(f"✅ duration {dur:.1f}s" if 25 <= dur <= 60
+                      else f"⚠️ duration {dur:.1f}s (target 25-60s)")
+
+        # 2) luminance floor — no dead-black frames
+        min_lum, worst_t = 255.0, 0.0
+        t = 0.0
+        while t < dur - 0.2:
+            try:
+                f = clip.get_frame(t)
+                lum = float(f.mean())
+                if lum < min_lum:
+                    min_lum, worst_t = lum, t
+            except Exception:
+                pass
+            t += 1.0
+        report.append(f"✅ luminance floor {min_lum:.0f}/255 (no dead-black frames)"
+                      if min_lum >= 8 else f"⚠️ near-black frame at {worst_t:.0f}s (luminance {min_lum:.0f})")
+
+        # 3) hook presence — bright text pixels in the top band within 1.2s
+        try:
+            f1 = clip.get_frame(min(0.6, dur / 2))
+            top = f1[:400, :, :]
+            bright = (0.2126 * top[..., 0] + 0.7152 * top[..., 1] + 0.0722 * top[..., 2]) > 150
+            frac = float(bright.mean())
+            report.append(f"✅ hook text visible early ({frac * 100:.0f}% bright top-band pixels)"
+                          if frac > 0.02 else "⚠️ no bright text detected in the first 1.2s — check the hook layer")
+        except Exception:
+            report.append("⚠️ hook check failed (frame read)")
+
+        # 4) frozen-frame check (first vs last frame)
+        try:
+            f0 = clip.get_frame(0.4)
+            fE = clip.get_frame(max(0.4, dur - 0.4))
+            diff = float(np.abs(f0.astype(float) - fE.astype(float)).mean())
+            report.append(f"✅ footage is moving (frame delta {diff:.1f})"
+                          if diff >= 1.0 else "⚠️ first and last frames nearly identical — possible frozen clip")
+        except Exception:
+            pass
+
+        # 5) audio: loudness + silent gaps
+        try:
+            a = clip.audio
+            arr = a.to_soundarray(fps=22050, quantize=False)
+            mono = arr.mean(axis=1) if arr.ndim > 1 else arr
+            rms = float(np.sqrt(np.mean(mono ** 2)))
+            lufs_est = 20 * np.log10(max(rms, 1e-6)) + 10.0   # 0.063 RMS ≈ -14 LUFS for speech
+            report.append(f"✅ loudness ≈ {lufs_est:.0f} LUFS (target ≈ -14)"
+                          if -18 <= lufs_est <= -11 else f"⚠️ loudness ≈ {lufs_est:.0f} LUFS (target -18..-11)")
+            sil = np.abs(mono) < 0.008
+            step = int(0.1 * 22050)
+            run = gaps = 0
+            for i in range(step, len(sil), step):
+                run = run + 1 if sil[i] else 0
+                if run == 8:      # 0.8s of silence
+                    gaps += 1
+                    run = 0
+            report.append("✅ no silent gaps > 0.8s" if gaps == 0 else f"⚠️ {gaps} silent gap(s) > 0.8s in the mix")
+        except Exception as e:
+            report.append(f"⚠️ audio QC failed: {e}")
+
+        clip.close()
+
+        # 6) captions
+        subs = parse_vtt(srt_path) if srt_path else []
+        if len(subs) >= 8:
+            report.append(f"✅ captions: {len(subs)} word cues (word-synced layer alive)")
+        elif subs:
+            report.append(f"⚠️ captions: only {len(subs)} cues — sync may be degraded")
+        else:
+            report.append("⚠️ captions: no SRT found — check the TTS stage")
+    except Exception as e:
+        report.append(f"❌ QC failed: {e}")
+    return report
 
 
 # ==============================================================================
@@ -2792,6 +2985,14 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     
     # Mix all sound design elements (subtitles pop clicks + transition whooshes + meme triggers) into the main audio track!
     all_sfx = sfx_clips + transition_audio_clips
+
+    # PIECE 13 — signature stinger at 0.0s: the channel's AUDIO identity.
+    # Same waveform + same volume in every video (sfx_level scales the whole SFX layer).
+    try:
+        all_sfx = all_sfx + [make_safe_sfx_clip(generate_signature_stinger(), 0.0, duration, 0.5 * sfx_level)]
+    except Exception as e:
+        print(f"[Audio] signature stinger skipped: {e}")
+
     if all_sfx:
         mixed_audio = CompositeAudioClip([mixed_audio] + all_sfx)
         
@@ -2863,7 +3064,16 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             if _l2 and not (_l2.startswith("[") and _l2.endswith("]")):
                 hook_line = re.sub(r"\[.*?\]", "", _l2).strip()
                 break
-        thumb_path = generate_thumbnail(output_video_path, hook_line, accent_rgb=accent_rgb)
+        # primary thumb = best-CTR variant so far (the template learns),
+        # numbered sidecars for the other two so the user can A/B in Studio
+        _primary = best_thumb_variant()
+        thumb_path = generate_thumbnail(output_video_path, hook_line, accent_rgb=accent_rgb, variant=_primary)
+        for _v in range(3):
+            if _v != _primary:
+                try:
+                    generate_thumbnail(output_video_path, hook_line, accent_rgb=accent_rgb, variant=_v)
+                except Exception:
+                    pass
     except Exception as e:
         print(f"[Thumbnail] skipped: {e}")
 

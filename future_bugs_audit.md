@@ -65,6 +65,52 @@ TEST EVIDENCE (2026-08-29):
    - Rendered frames checked: stacked hook (white+gold), grid+glow background,
      VTT-synced broll (spoken "brain" → neuron clip), red WARN-word captions.
 
+
+=============================================================================
+STATUS: FEATURE ROUND 2 (the growth loop) — 2026-08-29
+=============================================================================
+ 1. retention_engine.py  — YouTube Studio retention CSV import -> dip detection
+                            (hook-phase exempt, settle-aware baseline) -> whole-
+                            SENTENCE recut of the script. UI section in app.py.
+                            Tested: 30s synthetic curve, dip at 12-15s detected
+                            at 15.7pt depth; correct sentence removed, hook +
+                            CTA protected; 6 CSV layout variants parsed.
+ 2. script_engine.py     — script generator moved out of app.py (importable by
+                            CLI) + HOOK SCORECARD (0-100, 7 checks). daily.py
+                            auto-retries hooks below 60. Live badge in the UI.
+                            Tested: strong hook 75 vs weak hook 35; retry gate
+                            finds 75-point hooks; safety block intact.
+ 3. daily.py + queue.txt — CLI autopilot: queue -> script (score-gated) ->
+                            render (locked style, daily_settings.json) -> DB ->
+                            QC report -> git push to the videos repo -> log.
+                            schtasks one-liner in README for daily schedule.
+ 4. Multilingual (Hindi) — hi-IN voices in the UI + daily --lang hi. CRITICAL
+                            FONT BUG FOUND & FIXED: bundled DejaVuSans-Bold.ttf
+                            was a CORRUPTED file (bad sfntVersion) AND DejaVu has
+                            NO Devanagari glyphs -> tofu boxes in Hindi renders.
+                            Fix: real Noto Sans Devanagari (Regular+Bold)
+                            bundled; script-aware font router (Devanagari ->
+                            Noto, other non-Latin -> DejaVu, latin -> Montserrat).
+                            Tested: full Hindi render 85s, real Devanagari on
+                            screen (shaping caveat in README: perfect where
+                            Pillow has raqm; readable without, never tofu).
+ 5. Signature stinger   — deterministic 0.5s impact+shimmer+click at 0.0s,
+                            0.5 x sfx_level, every video (audio identity).
+ 6. Thumbnail variants  — 3 per render (frame time / text y / bar position);
+                            performance_log.json CTR learning: best-CTR variant
+                            becomes the primary on the next render. UI expander
+                            to paste CTR/views/avg-retention per video.
+ 7. QC report           — run_qc_report(): duration, luminance floor, hook
+                            visible in 1.2s, frozen-frame check, loudness
+                            ~-14 LUFS, silent gaps >0.8s, caption cue count.
+                            Shown in the app after render + printed by daily.py.
+
+KNOWN LIMITS (honest): Hindi shaping without raqm (Windows) = readable but
+marks sit loose; YouTube upload stays manual (daily.py pushes to the GitHub
+videos repo instead); thumbnail CTR learning is manual-paste (no OAuth).
+
+=============================================================================
+
 =============================================================================
 ORIGINAL AUDIT (kept for reference)
 =============================================================================
