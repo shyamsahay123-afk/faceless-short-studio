@@ -41,7 +41,7 @@ def init_db():
     try:
         c.execute("ALTER TABLE channels ADD COLUMN youtube_credentials TEXT")
         conn.commit()
-    except:
+    except Exception:
         pass
 
     try:
@@ -49,7 +49,7 @@ def init_db():
         c.execute("ALTER TABLE shorts ADD COLUMN subtitles_path TEXT")
         c.execute("ALTER TABLE shorts ADD COLUMN youtube_url TEXT")
         conn.commit()
-    except:
+    except Exception:
         pass
 
     conn.close()
@@ -155,7 +155,7 @@ def update_short_video(short_id, video_path, audio_path, subtitles_path, status=
             if fpath and fpath != video_path and os.path.exists(fpath):
                 try:
                     os.remove(fpath)
-                except:
+                except Exception:
                     pass # Ignore locked system files, they will be freed on exit
                     
     c.execute("""UPDATE shorts SET video_path=?, audio_path=?, subtitles_path=?, status=? WHERE id=?""", 
@@ -188,7 +188,7 @@ def delete_short(short_id):
             if fpath and os.path.exists(fpath):
                 try:
                     os.remove(fpath)
-                except:
+                except Exception:
                     pass
     c.execute("DELETE FROM shorts WHERE id=?", (short_id,))
     conn.commit()

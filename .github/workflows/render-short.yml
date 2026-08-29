@@ -1,0 +1,76 @@
+name: Render Short (free render farm)
+
+on:
+  workflow_dispatch:
+    inputs:
+      script_text:
+        description: "Full script (same format as the app: [0-3 sec HOOK], numbered points, [SAVE_TRIGGER_LIST: 1. x | 2. y | 3. z])"
+        required: true
+        type: string
+      voice:
+        description: "Narrator voice (edge-tts name)"
+        required: false
+        default: "en-US-ChristopherNeural"
+        type: string
+      accent:
+        description: "Accent color: yellow / green / cyan / red / magenta"
+        required: false
+        default: "yellow"
+        type: string
+      clip_mode:
+        description: "Clip mode: blend / inset / full / none"
+        required: false
+        default: "blend"
+        type: string
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install --quiet streamlit moviepy edge-tts pillow numpy requests huggingface_hub
+
+      - name: Write script file
+        run: |
+          cat > /tmp/render_script.txt << 'SCRIPT_EOF'
+          ${{ github.event.inputs.script_text }}
+          SCRIPT_EOF
+
+      - name: Render the short
+        env:
+          PEXELS_KEY: ${{ secrets.PEXELS_API_KEY }}
+          VOICE: ${{ github.event.inputs.voice }}
+          ACCENT: ${{ github.event.inputs.accent }}
+          CLIP_MODE: ${{ github.event.inputs.clip_mode }}
+        run: |
+          python3 - << 'PY'
+          import os, sys, shutil
+          sys.path.insert(0, '.')
+          import video_engine as ve
+          script = open('/tmp/render_script.txt').read()
+          v, a, s = ve.create_hybrid_ai_video(
+              "actions_render", script, None,
+              os.environ.get("VOICE", "en-US-ChristopherNeural"),
+              "yellow",
+              pexels_api_key=os.environ.get("PEXELS_KEY", ""),
+              progress_callback=lambda p, t: print(f"{p*100:5.1f}% {t}"),
+              caption_style="hormozi",
+              b_roll_source="pexels",
+              style_bg="grid",
+              style_accent=os.environ.get("ACCENT", "yellow"),
+              clip_mode=os.environ.get("CLIP_MODE", "blend"))
+          shutil.copy(v, "rendered_short.mp4")
+          print("OUTPUT: rendered_short.mp4")
+          PY
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-short
+          path: rendered_short.mp4

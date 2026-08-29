@@ -1,5 +1,8 @@
 import os
 import re
+import json
+import glob
+import gc
 import asyncio
 import threading
 import subprocess
@@ -10,9 +13,19 @@ import random
 import edge_tts
 import db_manager as db_settings
 from moviepy import (
-    VideoClip, ImageClip, VideoFileClip, AudioFileClip, CompositeVideoClip, TextClip, concatenate_videoclips, CompositeAudioClip, concatenate_audioclips
+    VideoClip, ImageClip, VideoFileClip, AudioFileClip, AudioClip, CompositeVideoClip, TextClip, concatenate_videoclips, CompositeAudioClip, concatenate_audioclips
 )
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
+try:
+    import style_engine as se
+except Exception as _se_err:
+    se = None
+    print(f"[Warning] style_engine failed to load: {_se_err}")
+try:
+    import pro_editor as pe
+except Exception as _pe_err:
+    pe = None
+    print(f"[Warning] pro_editor failed to load: {_pe_err}")
 try:
     from huggingface_hub import InferenceClient
 except ImportError:
@@ -64,15 +77,87 @@ def run_async_in_thread(coro):
 
 # ==============================================================================
 
-AUDIO_DIR = "audio_clips"
-VIDEO_DIR = "video_output"
-DEFAULT_DIR = "default_assets"
-B_ROLL_DIR = "b_roll_library"
+# B8 FIX: anchor all data dirs to the APP FOLDER (not the working directory),
+# so the engine works no matter where `py -m streamlit` is launched from.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+AUDIO_DIR = os.path.join(BASE_DIR, "audio_clips")
+VIDEO_DIR = os.path.join(BASE_DIR, "video_output")
+DEFAULT_DIR = os.path.join(BASE_DIR, "default_assets")
+B_ROLL_DIR = os.path.join(BASE_DIR, "b_roll_library")
 
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(VIDEO_DIR, exist_ok=True)
 os.makedirs(DEFAULT_DIR, exist_ok=True)
 os.makedirs(B_ROLL_DIR, exist_ok=True)
+
+# ==============================================================================
+# TEMP FILE DISCIPLINE (fixes B5 disk leak, B9 Windows file locks, O1 growth)
+# A killed render (power cut, OOM, crash) used to leak seg_*.mp4 / moviepy temp
+# audio / seed images forever — the disk slowly filled and the ZIPs got heavy.
+# ==============================================================================
+def _force_delete(path, tries=3):
+    """Windows-tolerant delete: file handles can stay locked a few ticks after
+    a clip is closed. Retry, then give up quietly (the next startup sweep
+    catches anything left behind)."""
+    for _i in range(tries):
+        try:
+            if path and os.path.exists(path):
+                os.remove(path)
+                return True
+            return False
+        except Exception:
+            time.sleep(0.25)
+    return False
+
+
+_TEMP_SWEEP_PATTERNS = (
+    "seg_*.mp4",               # B5: per-cut segment extractions (the big leak)
+    "TEMP_MPY_wvf_snd.*",      # B5: moviepy temp audio (crash leftovers)
+    "voice_chain_input.wav",   # B5: pro voice-chain scratch
+    "temp_gen_*.jpg",          # B5: AI seed images
+    "*_frame_tmp.jpg",         # B5: thumbnail frame scratch
+)
+
+
+def sweep_temp_files():
+    """Delete render leftovers from crashed/killed runs. Runs at startup."""
+    removed = 0
+    for pattern in _TEMP_SWEEP_PATTERNS:
+        for d in (BASE_DIR, AUDIO_DIR, os.getcwd()):
+            try:
+                for name in glob.glob(os.path.join(d, pattern)):
+                    if os.path.isfile(name) and _force_delete(name, tries=1):
+                        removed += 1
+            except Exception:
+                pass
+    return removed
+
+
+def prune_output_dirs(keep_videos=12, keep_broll=400):
+    """O1: bound disk growth — keep the newest N outputs, delete older.
+    Never touches files newer than 2 minutes (a running render)."""
+    removed = 0
+    now = time.time()
+    for d, keep in ((VIDEO_DIR, keep_videos), (B_ROLL_DIR, keep_broll)):
+        try:
+            files = []
+            for name in os.listdir(d):
+                if not name.startswith(("short_", "pexels_", "pixabay_", "generative_ai_")):
+                    continue
+                p = os.path.join(d, name)
+                if os.path.isfile(p) and (now - os.path.getmtime(p)) > 120:
+                    files.append((os.path.getmtime(p), p))
+            files.sort()
+            for _mt, p in files[: max(0, len(files) - keep)]:
+                if _force_delete(p):
+                    removed += 1
+        except Exception:
+            pass
+    return removed
+
+
+sweep_temp_files()
 
 # --- ADVANCED SEMANTIC CONCEPT EXPANDER ---
 CONCEPT_EXPANSIONS = {
@@ -123,6 +208,418 @@ CONCEPT_EXPANSIONS = {
     "consistency": "slow cinematic ticking grandfather clock gear close up"
 }
 
+# --- THE METAPHOR BRAIN: abstract words → cinematic visual metaphors ---
+# Pro technique: you never search "dopamine video". You search the FEELING-AS-IMAGE.
+# (dopamine → neurons firing, willpower → chain breaking, habit → spinning gears...)
+METAPHOR_EXPANSIONS = {
+    # --- mind / psychology (your main niche) ---
+    "dopamine": "glowing brain neurons firing electric synapses dark macro",
+    "serotonin": "calm golden light through abstract waves dark",
+    "willpower": "iron chain links breaking slow motion dark",
+    "motivation": "spark igniting flame slow motion dark",
+    "discipline": "soldier marching through fog silhouette",
+    "habit": "spinning mechanical gears loop macro dark",
+    "addiction": "rope chains binding hands dark close up",
+    "fear": "shadow figure standing in dark hallway",
+    "anxiety": "tangled wires electric tension close up",
+    "stress": "water pressure waves dark macro",
+    "trauma": "cracked glass slow motion dark",
+    "memory": "old film reel spinning warm light",
+    "overthinking": "spinning maze top view dark",
+    "decision": "fork in the road in fog",
+    "choice": "fork in the road in fog",
+    "confidence": "person walking through glass doors slow motion",
+    "self-control": "hand pressing glowing control button dark",
+    "patience": "hourglass sand slow motion warm",
+    "anger": "red embers burning close up dark",
+    "regret": "fading old photograph dissolving",
+    "guilt": "heavy chains dragging floor dark",
+    "shame": "face hidden in shadow dark",
+    "pride": "head raised against sunrise silhouette",
+    "ego": "cracked mirror reflection",
+    "identity": "face half in shadow half in light",
+    "self-worth": "gold coin in hand spotlight",
+    "purpose": "single beam of light through darkness",
+    "meaning": "deep forest light beams",
+    "dream": "drifting clouds golden sunrise",
+    "ambition": "climber reaching mountain peak storm",
+    "success": "gold trophy on podium spotlight",
+    "failure": "chess piece knocked over slow motion",
+    "risk": "tightrope walker over void dark",
+    "reward": "gold coins falling slow motion",
+    "comfort": "warm candle flame cozy dark",
+    "struggle": "hands climbing rock wall close up",
+    "peace": "still lake mirror reflection dawn",
+    "calm": "mist over still water slow",
+    "chaos": "shattered glass frozen explosion",
+    "order": "perfectly aligned chess pieces dark",
+    "loop": "circular neon light track rotating dark",
+    "cycle": "rotating clock hands time lapse",
+    "pattern": "neon fractal pattern forming dark",
+    "trigger": "finger on glowing button dark close up",
+    "signal": "pulsing neon light waves dark",
+    "reaction": "lightning bolt strike dark clouds",
+    "instinct": "animal eyes glowing in dark",
+    "impulse": "sparks jumping between metal dark",
+    "control": "hand on glowing control wheel dark",
+    "freedom": "bird silhouette flying into sunrise",
+    "free": "bird silhouette flying into sunrise",
+    "demand": "crowd reaching up toward light dark",
+    "stuck": "tangled rope knot close up dark",
+    "different": "two diverging paths fog light",
+    "top": "summit peak above clouds sunrise",
+    "neuroscience": "glowing brain circuit dark macro",
+    "real": "crystal clear water surface light",
+    "strict": "metal ruler straight edge close up",
+    "true": "scales balanced light dark",
+    "pattern": "neon fractal pattern forming dark",
+    "hidden": "mysterious figure shadow smoke dark",
+    "trap": "sinking into quicksand silhouette",
+    "loop": "circular neon light track rotating dark",
+    "trapped": "gloves in barbed wire dark",
+    "escape": "door opening into bright light dark room",
+    "wall": "concrete wall single crack light",
+    "ceiling": "looking up at dark ceiling light",
+    "floor": "looking down dark stairs",
+    "foundation": "deep building foundations concrete",
+    "root": "tree roots in dark soil macro",
+    "core": "glowing core center dark sphere",
+    "balance": "yogi balancing silhouette beam",
+    "harmony": "chord ripples in water",
+    "conflict": "two shadows facing off dark",
+    "tension": "stretched rubber band extreme close up",
+    "release": "dam gates opening water rush",
+    "pressure": "deep sea water pressure dark",
+    "weight": "heavy iron weights lifting gym",
+    "burden": "back bent under heavy load silhouette",
+    "rise": "sunrise over dark horizon time lapse",
+    "fall": "leaves falling in wind slow motion",
+    "climb": "hand gripping climbing hold dark",
+    "peak": "mountain peak above clouds sunrise",
+    "momentum": "bowling ball rolling dark lane",
+    "flow": "ink flowing in water slow motion",
+    "current": "river current fast dark",
+    "stream": "river stream forest light",
+    "ocean": "ocean waves dark storm",
+    "wave": "ocean wave crest dark",
+    "tide": "ocean tide pulling rocks",
+    "thunder": "thunderstorm dark clouds lightning",
+    "lightning": "lightning strike dark night",
+    "ash": "ash particles floating dark",
+    "mist": "mist drifting through forest",
+    "fog": "fog rolling over dark city",
+    "cloud": "dramatic clouds time lapse",
+    "sky": "vast dark sky stars",
+    "sun": "sun breaking through clouds",
+    "moon": "full moon dark sky",
+    "star": "single bright star dark sky",
+    "spark": "sparks flying slow motion dark",
+    "ember": "glowing ember close up dark",
+    "flame": "flame dancing dark background",
+    "smoke": "smoke curling in dark light",
+    "shadow": "long shadow walking dark street",
+    "light": "single light beam through darkness",
+    "dark": "deep darkness single light",
+    "darkness": "deep darkness single light",
+    "bright": "bright light burst dark",
+    "midnight": "midnight city skyline dark",
+    "reset": "clean empty desk morning light",
+    "restart": "engine starting garage dark",
+    "transform": "caterpillar butterfly macro",
+    "change": "pages flipping fast close up",
+    "shift": "switch flipping light dark",
+    "grow": "plant sprout growing timelapse dark soil",
+    "shrink": "balloon deflating slow motion",
+    "expand": "balloon inflating close up",
+    "simple": "single line on white minimal",
+    "complex": "tangled knot ropes close up",
+    "clear": "clear water ripples light",
+    "confuse": "spiral staircase top view",
+    "understand": "light bulb turning on dark",
+    "realize": "eyes opening close up light",
+    "believe": "hand holding small light dark",
+    "doubt": "scales tipping dark close up",
+    "hope": "single candle in storm",
+    "faith": "hand reaching up to light",
+    "luck": "four leaf clover macro",
+    "chance": "door ajar with light",
+    "destiny": "star map glowing dark",
+    "fate": "cards being dealt table",
+    "story": "old book opening pages",
+    "journey": "road disappearing into mountains",
+    "path": "narrow path through dark forest",
+    "road": "empty road night headlights",
+    "start": "runner breaking starting blocks",
+    "finish": "crossing finish line ribbon",
+    "end": "setting sun horizon dark",
+    "beginning": "first crack of dawn",
+    "middle": "bridge over valley",
+    "turn": "car turning corner night light",
+    "step": "footsteps on wet pavement night",
+    "progress": "neon progress bar filling dark",
+    "improve": "rising graph line neon dark",
+    "level": "neon level up dark",
+    "upgrade": "arrow up through glass dark",
+    "master": "master chess move close up",
+    "expert": "precise hands working dark",
+    "beginner": "first step onto dark stage",
+    "student": "student studying lamp night",
+    "teacher": "chalk writing board close up",
+    "mentor": "hand guiding another hand",
+    "leader": "leader silhouette facing crowd",
+    "team": "team huddle silhouettes night",
+    "solo": "one figure vast landscape",
+    "crowd": "crowd from above night lights",
+    "audience": "theater seats dark light",
+    "public": "city crowd time lapse night",
+    "private": "closed door keyhole light",
+    "social": "many connected lights dark",
+    "media": "screens wall glow dark room",
+    "internet": "neon network globe dark",
+    "world": "earth from space dark",
+    "society": "building skyline night",
+    "culture": "traditional mask collection dark",
+    "family": "hands stacked together warm",
+    "friend": "two chairs by fire",
+    "stranger": "face in crowd blur night",
+    "enemy": "dark figure across table",
+    "partner": "two hands one rope",
+    # --- relationships / intimacy ---
+    "love": "two hands holding candle warm dark",
+    "trust": "two hands firm handshake close up",
+    "attraction": "magnets pulling sparks close up",
+    "chemistry": "chemical reaction flask glow dark",
+    "intimacy": "two silhouettes close warm light",
+    "connection": "two lights connecting beam dark",
+    "betrayal": "broken ring in half dark",
+    "jealousy": "red mist over eyes dark",
+    "respect": "hand over heart warm light",
+    "apology": "hand extended across table",
+    "fight": "sparks between metal dark close up",
+    "forgiveness": "broken chain released light",
+    "commitment": "rings on velvet box dark",
+    "distance": "two figures far apart bridge",
+    "close": "two faces close silhouette",
+    "kiss": "lips close up slow motion",
+    "touch": "fingertips touching close up",
+    "hug": "embrace silhouette warm light",
+    "argue": "shattered mirror dark",
+    "break": "breaking rope slow motion dark",
+    "together": "two puzzle pieces locking",
+    "apart": "two boats drifting apart sea",
+    "reunion": "door opening two silhouettes light",
+    "heart": "glowing heart beating macro dark",
+    "soul": "glowing spirit dark background",
+    "desire": "burning ember close up dark",
+    "passion": "flame rising dark background",
+    "romance": "candle light dinner table dark",
+    "secret": "locked diary candle light",
+    "promise": "hand over heart candle",
+    "loyalty": "dog silhouette guarding gate",
+    # --- money / growth ---
+    "debt": "chains of coins binding dark",
+    "invest": "hand planting seed in soil",
+    "return": "returning arrow to bow",
+    "profit": "rising green chart neon dark",
+    "earn": "coins dropping into jar",
+    "save": "gold coins into vault safe",
+    "spend": "bills flying out of hand",
+    "cost": "scales weighing gold coins",
+    "price": "price tag on gold bar",
+    "bank": "bank vault door opening",
+    "loan": "hand over signed contract",
+    "income": "coins pouring from pipe",
+    "salary": "envelope with cash on desk",
+    "budget": "calculator with coins close up",
+    "luxury": "luxury car interior night",
+    "status": "gold nameplate office",
+    "power": "lightning in glass jar dark",
+    "influence": "one domino knocking many dark",
+    "network": "neon connection nodes dark",
+    "deal": "handshake over contract",
+    "scam": "card trick hands close up",
+    "trap": "sinking into quicksand silhouette",
+    "game": "chess board close up dark",
+    "play": "dice rolling close up dark",
+    "bet": "casino chips stacking",
+    "win": "confetti falling gold",
+    "lose": "chess piece falling table",
+    "compete": "two runners starting line",
+    "rival": "two silhouettes facing off dark",
+    # --- time / focus / action ---
+    "hour": "vintage clock ticking macro dark",
+    "minute": "clock hands moving macro",
+    "second": "stopwatch counting dark",
+    "fast": "speeding car light trails night",
+    "slow": "slow motion water droplets",
+    "rush": "crowd moving fast blur night",
+    "pause": "paused film frame dark",
+    "deadline": "red alarm clock spinning",
+    "schedule": "calendar pages flipping",
+    "routine": "identical doors in a row dark",
+    "distraction": "phone light in dark room",
+    "attention": "searchlight beam dark",
+    "concentrate": "lens focusing light beam dark",
+    "relax": "steam rising from tea cup",
+    "rest": "sleeping cat by window",
+    "sleep": "moon over sleeping city",
+    "wake": "sunrise over bed curtain",
+    "train": "athlete training gym dark",
+    "learn": "open book pages flipping candle",
+    "knowledge": "library of glowing books dark",
+    "wisdom": "ancient scroll candle light",
+    "skill": "hand playing piano close up",
+    "talent": "light bulb glowing dark",
+    "genius": "brain circuit glowing dark",
+    "smart": "neon brain connection dark",
+    "intelligent": "glowing digital synapses grid dark",
+    "lazy": "empty bed unmade morning light",
+    "effort": "sweat drop close up dark",
+    "hard": "rock wall climbing dark",
+    "easy": "smooth rolling ball light",
+    "execute": "fist striking target dark",
+    "action": "runner exploding start dark",
+    "act": "hand raising light dark",
+    "build": "hands building blocks light",
+    "create": "hands sculpting light dark",
+    "destroy": "crashing wave dark",
+    "fix": "hands repairing machinery light",
+    "heal": "hands holding light dark",
+    "cure": "medicine bottle light dark",
+    "poison": "dark liquid dripping",
+    "dose": "measuring spoon close up",
+    "pump": "pump handle pumping dark",
+    "inject": "syringe close up dark",
+    "habit": "spinning mechanical gears loop macro dark",
+    "morning": "morning sun rays through foggy forest",
+    "evening": "evening sky city lights",
+    "night": "midnight city skyline dark",
+    "work": "dark luxury office screen glowing code close up",
+    "office": "empty dark luxury office warm lamp light",
+    "study": "dark library old bookshelves glowing warm candle",
+    "time": "vintage golden hourglass sand running macro dark",
+    "busy": "hyperlapse busy city street traffic lights night",
+    "success": "luxury sports car driving city night neon",
+    "wealth": "gold bars stack vaults dark shadow cinematic",
+    "consistency": "slow cinematic ticking grandfather clock gear close up",
+    "money": "luxury gold bars vault safe",
+    "cash": "counting dollar bills hands slow motion",
+    "secrets": "mysterious figure shadow smoke",
+    "truth": "hundred percent 100 badge neon",
+    "mistake": "crumpled paper trash basket",
+    "destroying": "fire flames burning close up",
+    "people": "cinematic silhouettes luxury dark city night",
+    "place": "dark moody luxury room background neon glowing",
+    "chatting": "shadowy figures talking smoky dark lounge cinematic",
+    "phone": "glowing smartphone screen close up dark room hands",
+    "talk": "cinematic shadowy silhouettes talking lounge",
+    "man": "shadowy man silhouette walking dark street slow motion",
+    "woman": "cinematic woman walking dark rain night light close up",
+    "think": "close up looking thoughtful moody library warm light",
+    "look": "deep focused eye macro cinematic reflections",
+    "brain": "neon brain holographic rotation",
+    "mind": "glowing human brain macro",
+    "neuro": "glowing digital synapses grid",
+    "focus": "macro focus eye iris",
+    "boundary": "dark locked gate neon light",
+    "lock": "cyber padlock key close up",
+    "screen": "code matrix lines green",
+    "deep": "galaxy deep space cosmic nebulas",
+    "friction": "running shoes asphalt fast pace",
+    "immediately": "lightning storm striking clouds",
+    "automate": "industrial robotic arms assembly",
+    "performers": "elite executive walking slow motion",
+    "waste": "hourglass sand spilling macro",
+    "scrolling": "smart phone screen scrolling glow close up",
+    "percent": "luxury penthouse view night",
+    "disciplined": "workout training morning sweat",
+    "minds": "brain connection cyber glow",
+    "harvard": "classic library old books bookshelf",
+    "studies": "cinematic retro clock ticking",
+    "show": "projector screen lens flare",
+}
+
+# merge the metaphor brain into the concept expander
+CONCEPT_EXPANSIONS.update(METAPHOR_EXPANSIONS)
+
+# --- VTT-SYNCED B-ROLL SELECTION (pro fix: the clip must match the word being
+# SPOKEN at that moment — never a rotating list from the whole script) ---
+GENERIC_WORDS = {
+    # pronouns / people-generic (these caused "a girl in different worlds")
+    "she", "her", "hers", "he", "him", "his", "they", "them", "their", "it", "its",
+    "you", "your", "yours", "we", "us", "our", "i", "my", "me",
+    "woman", "women", "girl", "girls", "man", "men", "people", "person",
+    "somebody", "someone", "everyone", "nobody", "anyone", "face", "faces",
+    "eye", "eyes", "hand", "hands", "body", "head", "hair", "voice", "voices",
+    # function words / adverbs (searching these returns garbage like "too" → flowers)
+    "too", "very", "really", "just", "only", "even", "still", "now", "then", "here",
+    "there", "this", "that", "these", "those", "what", "which", "who", "when",
+    "where", "how", "why", "can", "could", "will", "would", "should", "do", "does",
+    "did", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+    "not", "no", "yes", "and", "but", "or", "if", "so", "as", "at", "by", "for",
+    "from", "into", "of", "on", "onto", "up", "with", "without", "about", "after",
+    "before", "between", "over", "under", "again", "further", "once", "during",
+    "while", "because", "through", "until", "against", "both", "each", "few",
+    "more", "most", "other", "some", "such", "than", "own", "same", "also",
+    "well", "back", "little", "yet", "the", "a", "an", "in", "to", "of", "and",
+}
+
+
+# Concrete nouns that are SAFE to search raw on Pexels (they have real footage).
+# Anything not on this list (and not in the metaphor map) → hold previous visual.
+CONCRETE_NOUNS = {
+    "kitchen", "kitchen", "ocean", "sea", "river", "lake", "pool", "water", "ice",
+    "stone", "rock", "sand", "soil", "seed", "seeds", "leaf", "leaves", "tree",
+    "trees", "forest", "jungle", "desert", "beach", "wave", "waves", "tide",
+    "mountain", "mountains", "hill", "valley", "cave", "city", "town", "village",
+    "street", "road", "path", "bridge", "tunnel", "building", "buildings",
+    "house", "home", "room", "office", "desk", "chair", "table", "bed", "door",
+    "doors", "window", "windows", "wall", "walls", "floor", "ceiling", "roof",
+    "garden", "park", "school", "library", "museum", "theater", "cinema",
+    "church", "temple", "hospital", "lab", "factory", "farm", "field",
+    "coffee", "tea", "wine", "bread", "food", "book", "books", "paper", "pen",
+    "pencil", "key", "keys", "lock", "gate", "clock", "watch", "hourglass",
+    "candle", "candles", "sun", "moon", "star", "stars", "sky", "cloud",
+    "clouds", "rain", "snow", "storm", "lightning", "smoke", "ash", "flame",
+    "flames", "fire", "ember", "embers", "spark", "sparks", "light", "shadow",
+    "shadows", "mirror", "camera", "phone", "screen", "screens", "code", "guitar",
+    "piano", "violin", "music", "glove", "gloves", "ring", "rings", "chain",
+    "chains", "rope", "rope", "coin", "coins", "cash", "bills", "money",
+    "vault", "safe", "card", "cards", "dice", "chess", "puzzle", "puzzle",
+    "ladder", "staircase", "stairs", "elevator", "car", "cars", "bike", "train",
+    "plane", "boat", "ship", "balloon", "butterfly", "bird", "birds", "dog",
+    "cat", "horse", "lion", "tiger", "eagle", "snake", "wolf", "bear",
+}
+
+
+def spoken_word_in_window(start_t, end_t, vtt_subs, used_words):
+    """Find the best searchable word being SPOKEN during [start_t, end_t].
+    Priority: words with a metaphor/concept entry. Skips generic words.
+    Returns None when nothing meaningful is spoken (→ reuse previous clip)."""
+    if not vtt_subs:
+        return None
+    for s in vtt_subs:
+        if s['end'] <= start_t or s['start'] >= end_t:
+            continue
+        w = re.sub(r'[^a-z0-9]', '', str(s['text']).lower())
+        if len(w) < 3 or w in GENERIC_WORDS:
+            continue
+        if w in CONCEPT_EXPANSIONS and w not in used_words:
+            return w
+    # second pass: ONLY concrete nouns (kitchen, ocean, watch...) are safe raw
+    # searches. Abstract/unknown words → None → the previous visual continues
+    # (pro editors hold the visual when they can't illustrate the word).
+    for s in vtt_subs:
+        if s['end'] <= start_t or s['start'] >= end_t:
+            continue
+        w = re.sub(r'[^a-z0-9]', '', str(s['text']).lower())
+        if w in GENERIC_WORDS or w in used_words:
+            continue
+        if w in CONCRETE_NOUNS:
+            return w
+    return None
+
+
 def expand_keyword_to_concept(word):
     word_clean = str(word).lower().strip()
     return CONCEPT_EXPANSIONS.get(word_clean, f"aesthetic {word_clean}")
@@ -149,15 +646,52 @@ def extract_best_keywords(text, num_words=12):
                 break
     return result if result else ["abstract"]
 
+# --- PEXELS HOURLY BUDGET GATE (fix F2) ---
+# Free tier = 200 API calls/hour. A 5-video batch with ~20 cuts each would
+# burn 100+ searches and 429 halfway through. We track calls per hour and
+# auto-switch to Pixabay (separate budget) the moment the cap is near.
+PEXELS_GATE = {"window_start": 0.0, "count": 0, "blocked_until": 0.0, "announced": False}
+PEXELS_HOUR_LIMIT = 190   # safety margin under the 200 cap
+
+
+def _pexels_gate_open():
+    now = time.time()
+    if now - PEXELS_GATE["window_start"] >= 3600:
+        PEXELS_GATE["window_start"] = now
+        PEXELS_GATE["count"] = 0
+        PEXELS_GATE["announced"] = False
+    return now >= PEXELS_GATE["blocked_until"] and PEXELS_GATE["count"] < PEXELS_HOUR_LIMIT
+
+
+def _pexels_charge():
+    PEXELS_GATE["count"] += 1
+
+
+def _pexels_trip_block(reason=""):
+    PEXELS_GATE["blocked_until"] = time.time() + 3600
+    PEXELS_GATE["announced"] = False
+    print(f"[Pexels] {reason} — using Pixabay for the rest of this hour.")
+
+
 # --- PEXELS DYNAMIC VIDEO DOWNLOADER ---
 def download_pexels_b_roll(query, api_key):
     clean_query = str(query).replace(" ", "+")
-    
+
+    if not _pexels_gate_open():
+        if not PEXELS_GATE["announced"]:
+            PEXELS_GATE["announced"] = True
+            print("[Pexels] Hourly API budget (200 req/hr) nearly used — switching to Pixabay.")
+        return None
+
     headers = {"Authorization": api_key}
     url = f"https://api.pexels.com/videos/search?query={clean_query}&per_page=15&orientation=portrait"
-    
+
     try:
+        _pexels_charge()
         r = requests.get(url, headers=headers, timeout=12)
+        if r.status_code == 429:
+            _pexels_trip_block("rate limit hit (HTTP 429)")
+            return None
         if r.status_code == 200:
             data = r.json()
             videos = data.get("videos", [])
@@ -251,57 +785,150 @@ def download_pexels_b_roll_with_fallback(query, api_key, source="pexels", color_
     return download_pexels_b_roll(backup_query, api_key)
 
 # --- TRUE DYNAMIC GENERATIVE AI TEXT-TO-VIDEO INTEGRATION (WITH ADVANCED SECURE DNS FALLBACK ENGINES!) ---
-def generate_true_ai_video_clip(prompt, hf_token):
+# F4: HF inference credits often 402 after depletion, and each failed attempt
+# costs ~40s per clip. Circuit breaker: 2 consecutive failures → skip HF for
+# 10 minutes and go straight to the backup layer (Pollinations / stock).
+HF_CIRCUIT = {"fails": 0, "open_until": 0.0}
+
+
+def load_pollinations_key():
+    """B3: optional Pollinations key (sk_/pk_) = no rate limit, no watermark.
+    Source: pollinations_key.txt in the app folder, or the POLLINATIONS_KEY env."""
+    try:
+        v = os.environ.get("POLLINATIONS_KEY", "").strip()
+        if v:
+            return v
+        p = os.path.join(BASE_DIR, "pollinations_key.txt")
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return ""
+
+
+# ==============================================================================
+# PIECE 4 — CHARACTER BIBLE: the channel's locked visual identity.
+# One description + ONE fixed seed = the SAME look in every video (kills
+# identity drift: "even identical prompts produce different results" is fixed
+# by pinning the seed + a fixed character description).
+# ==============================================================================
+CHARACTER_BIBLE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "character_bible.json")
+DEFAULT_CHARACTER_BIBLE = {
+    "enabled": True,
+    "name": "The Narrator",
+    "description": "cinematic young man, short dark hair, black leather jacket, calm confident expression, cinematic rim lighting",
+    "style_suffix": "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition",
+    "seed": 421337,
+}
+
+
+def load_character_bible():
+    try:
+        if os.path.exists(CHARACTER_BIBLE_PATH):
+            with open(CHARACTER_BIBLE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            merged = dict(DEFAULT_CHARACTER_BIBLE)
+            merged.update(data)
+            return merged
+    except Exception:
+        pass
+    return dict(DEFAULT_CHARACTER_BIBLE)
+
+
+def save_character_bible(data):
+    try:
+        with open(CHARACTER_BIBLE_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+def _bible_prompt(prompt, bible, seed_offset):
+    """Build the consistent character prompt + deterministic seed (piece 4)."""
+    if bible and bible.get("enabled", True) and bible.get("description"):
+        full_prompt = f"{bible['description']}, scene: {prompt}, {bible.get('style_suffix', 'dark cinematic, 8k, photorealistic, vertical 9:16')}"
+        seed = int(bible.get("seed", 421337)) + int(seed_offset)
+    else:
+        full_prompt = f"aesthetic portrait 9:16 vertical close up of {prompt}, dark luxury atmosphere, highly cinematic, 8k resolution, photorealistic"
+        seed = random.randint(1, 999999)
+    return full_prompt, seed
+
+
+def generate_true_ai_video_clip(prompt, hf_token, bible=None, seed_offset=0, prefer_pollinations=False):
     """
-    Generates a high-quality vertical scene from scratch using Hugging Face's 
-    Inference Providers (FLUX.1-dev via fal-ai) or falls back to Pollinations.ai 
-    (100% Free, keyless, and unlimited AI) and Animates it with a smooth 15% 
-    constant Ken Burns Zoom, producing a flawless 24fps vertical video loop!
-    This is 100% free, runs in 2s, avoids 402 payment errors, and solves Windows DNS name resolution errors!
+    PIECES 4+5 — AI clip generator with CHARACTER BIBLE + AUTO MODE.
+    Order: prefer_pollinations=True (Auto mode) -> Pollinations first (keyless,
+    never depletes), HF second. Default: HF first, Pollinations second.
+    Bible locks the character (fixed description + fixed seed) so video #50
+    looks like video #1.
     """
     import urllib.parse
     clean_prompt = str(prompt).replace(" ", "_").lower()
     local_path = os.path.join(B_ROLL_DIR, f"generative_ai_{clean_prompt[:20]}_916.mp4")
-    
+
     if os.path.exists(local_path):
         return local_path
-        
+
     temp_img_path = os.path.join(B_ROLL_DIR, f"temp_gen_{clean_prompt[:20]}.jpg")
     img_obtained = False
-    
-    # --- LAYER 1: TRY HUGGING FACE INFERENCE CLIENT (IF TOKEN PRESENT) ---
-    if hf_token and hf_token.strip():
+    full_prompt, seed = _bible_prompt(prompt, bible, seed_offset)
+
+    def _try_hf():
+        if time.time() < HF_CIRCUIT["open_until"]:
+            return False   # F4: circuit open — skip the 40s dead attempt
         try:
-            print(f"Generative AI (Layer 1): Attempting generation with Hugging Face InferenceClient...")
+            print(f"Generative AI: Attempting Hugging Face InferenceClient...")
             client = InferenceClient(provider="fal-ai", api_key=hf_token)
-            full_prompt = f"aesthetic portrait 9:16 vertical close up of {prompt}, dark luxury atmosphere, highly cinematic, 8k resolution, photorealistic"
             img = client.text_to_image(full_prompt, model="black-forest-labs/FLUX.1-dev")
             img.save(temp_img_path, format="JPEG")
-            img_obtained = True
-            print(f"Generative AI (Layer 1): Seed image drawn successfully via Hugging Face.")
+            print("Generative AI: Seed image drawn via Hugging Face.")
+            HF_CIRCUIT["fails"] = 0
+            return True
         except Exception as e:
-            print(f"Generative AI (Layer 1): Hugging Face failed (402 or connection error): {e}. Dropping into Layer 2 (Pollinations)...")
-            
-    # --- LAYER 2: CHOOSE KEYLESS, 100% FREE POLLINATIONS.AI (FLUX MODEL!) ---
-    if not img_obtained:
+            HF_CIRCUIT["fails"] += 1
+            if HF_CIRCUIT["fails"] >= 2:
+                HF_CIRCUIT["open_until"] = time.time() + 600
+                HF_CIRCUIT["fails"] = 0
+                print("Generative AI: HF failing repeatedly (likely credits 402/depleted) — skipping HF for 10 min, using backup layer.")
+            else:
+                print(f"Generative AI: Hugging Face failed ({e}). Trying next layer...")
+            return False
+
+    def _try_pollinations():
         try:
-            print(f"Generative AI (Layer 2): Drawing beautiful vertical seed image using Pollinations.ai (Keyless & 100% Free)...")
-            full_prompt = f"aesthetic portrait 9:16 vertical close up of {prompt}, dark luxury atmosphere, highly cinematic, 8k resolution, photorealistic"
+            # B3: with a key (sk_/pk_) = no rate limit, no watermark, faster lane
+            poll_key = load_pollinations_key()
+            print(f"Generative AI: Drawing seed image via Pollinations.ai ({'keyed' if poll_key else 'keyless, rate-limited'}, fixed seed {seed})...")
             encoded_prompt = urllib.parse.quote(full_prompt)
-            # Query the high-speed, keyless Pollinations.ai image generator with FLUX model and vertical aspect ratio (720x1280)
-            seed = random.randint(1, 999999)
             pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=720&height=1280&nologo=true&model=flux&seed={seed}"
-            
-            response = requests.get(pollinations_url, timeout=25)
+            headers = {}
+            if poll_key:
+                pollinations_url += f"&key={urllib.parse.quote(poll_key)}"
+                headers = {"Authorization": f"Bearer {poll_key}"}
+            response = requests.get(pollinations_url, headers=headers, timeout=120)
             if response.status_code == 200 and len(response.content) > 5000:
                 with open(temp_img_path, "wb") as f:
                     f.write(response.content)
-                img_obtained = True
-                print(f"Generative AI (Layer 2): Seed image generated and written successfully via Pollinations.")
-            else:
-                print(f"Generative AI (Layer 2): Pollinations returned invalid response (code: {response.status_code}).")
+                print("Generative AI: Seed image drawn via Pollinations.")
+                return True
+            print(f"Generative AI: Pollinations invalid response (code: {response.status_code}).")
+            return False
         except Exception as e:
-            print(f"Generative AI (Layer 2): Pollinations drawing failed: {e}")
+            print(f"Generative AI: Pollinations drawing failed: {e}")
+            return False
+
+    # --- LAYER ORDER (AUTO MODE: Pollinations primary — keyless, never 402) ---
+    if prefer_pollinations:
+        img_obtained = _try_pollinations()
+        if not img_obtained and hf_token and hf_token.strip():
+            img_obtained = _try_hf()
+    else:
+        if hf_token and hf_token.strip():
+            img_obtained = _try_hf()
+        if not img_obtained:
+            img_obtained = _try_pollinations()
             
     # --- STEP 3: ANIMATE THE IMAGE INTO A GORGEOUS 24FPS VIDEO LOOP! ---
     if img_obtained and os.path.exists(temp_img_path):
@@ -328,8 +955,10 @@ def generate_true_ai_video_clip(prompt, hf_token):
         except Exception as e:
             print(f"Generative AI: Slideshow compilation stage failed: {e}")
             if os.path.exists(temp_img_path):
-                try: os.remove(temp_img_path)
-                except: pass
+                try:
+                    os.remove(temp_img_path)
+                except Exception:
+                    pass
                 
     return None
 
@@ -528,12 +1157,13 @@ def make_ken_burns_clip(img_path, duration):
         cropped = base_img_cropped.crop((left, top, left + vw, top + vh))
         
         arr = np.array(cropped.resize((target_w, target_h), Image.Resampling.LANCZOS))
-        # Apply luxury color wash desaturation & warming
-        arr_f = arr.astype(float)
-        arr_f[:, :, 0] *= 0.76  # Rich Red/Gold
-        arr_f[:, :, 1] *= 0.70  # Gold Green
-        arr_f[:, :, 2] *= 0.58  # Slate Blue (desaturated)
-        return np.clip(arr_f, 0, 255).astype('uint8')
+        # Apply premium dark grade (mid-gray darkening + contrast + saturation comp)
+        if se is not None:
+            try:
+                return se.grade_frame(arr)
+            except Exception:
+                pass
+        return arr
         
     return VideoClip(make_frame, duration=duration)
 
@@ -557,9 +1187,9 @@ def make_high_impact_badge(text, color_bg=(255, 59, 48, 235), outline_color=(255
     from PIL import ImageFont
     try:
         font = ImageFont.load_default(size=28)
-    except:
+    except TypeError:
         font = ImageFont.load_default()
-        
+
     text_w = len(text) * 14
     text_x = (width - text_w) // 2
     text_y = (height - 38) // 2
@@ -569,34 +1199,12 @@ def make_high_impact_badge(text, color_bg=(255, 59, 48, 235), outline_color=(255
 
 def build_retention_overlays(duration):
     """
-    Creates multiple highly psychological pop-up stickers (warning badges) 
-    across the video timeline to spike curiosity and force a 150%+ rewatch loop rate!
+    DEPRECATED — the gimmick warning badges (DO NOT SCROLL etc.) were removed.
+    They are replaced by the content-driven elite text layer (style_engine):
+    stacked hook, script beats, curiosity cards, stat cards and arrows.
+    Kept as a no-op for backward compatibility.
     """
-    overlays = []
-    
-    # 1. THE HOOK ALERT (Pops up at 0.3s for 1.4s)
-    hook_badge = make_high_impact_badge("SYSTEM ALERT: DO NOT SCROLL", color_bg=(255, 59, 48, 240))
-    hook_clip = ImageClip(np.array(hook_badge)).with_start(0.3).with_duration(1.4).with_position(("center", 240))
-    overlays.append(hook_clip)
-    
-    # 2. CURIOSITY TRIGGER (Pops up around 4.5s for 1.3s)
-    curiosity_badge = make_high_impact_badge("COGNITIVE LOOP: ACTIVE", color_bg=(255, 149, 0, 240)) # Neon Orange
-    curiosity_clip = ImageClip(np.array(curiosity_badge)).with_start(4.5).with_duration(1.3).with_position(("center", 240))
-    overlays.append(curiosity_clip)
-    
-    # 3. VALUE PROOF (Pops up around 11s for 1.2s)
-    proof_badge = make_high_impact_badge("SECRET STRATEGY EXPOSED", color_bg=(52, 199, 89, 240)) # Green
-    proof_clip = ImageClip(np.array(proof_badge)).with_start(11.0).with_duration(1.2).with_position(("center", 240))
-    overlays.append(proof_clip)
-    
-    # 4. INFINITE LOOP REWATCH TRIGGER (Pops up in the last 1.8 seconds of the video)
-    if duration > 5.0:
-        loop_start = duration - 1.8
-        loop_badge = make_high_impact_badge("INFINITE LOOP: TIMELINE BIND", color_bg=(142, 68, 173, 245)) # Deep Purple
-        loop_clip = ImageClip(np.array(loop_badge)).with_start(loop_start).with_duration(1.8).with_position(("center", 240))
-        overlays.append(loop_clip)
-        
-    return overlays
+    return []
 
 # --- CINEMATIC RADIAL VIGNETTE OVERLAY (EYE FUNNEL MASK) ---
 def make_vignette_overlay(duration):
@@ -625,10 +1233,92 @@ def make_light_leak_flash(start_t, duration=0.25):
     img_arr = np.array(img)
     
     clip = ImageClip(img_arr).with_start(start_t).with_duration(duration)
-    # Ramps opacity up and down smoothly during the 0.25s flash
-    return clip.fl(lambda gf, t: gf(t) * (np.sin(t * (np.pi / duration)) if t <= duration else 0.0))
+    # Ramps opacity up and down smoothly during the flash (cross-version safe, no .fl)
+    def opacity_fn(gf, t):
+        f = np.sin(t * (np.pi / duration)) if 0 <= t <= duration else 0.0
+        return gf(t) * f
+    if se is not None:
+        try:
+            return se.clip_fl(clip, opacity_fn)
+        except Exception:
+            pass
+    try:
+        return clip.transform(opacity_fn)
+    except Exception:
+        return clip
 
 # --- GENERATE CONTINUOUS DEEP SUB-BASS ATMOSPHERIC HUM (STANDARD LIBRARY WAV GENERATOR) ---
+# ==============================================================================
+# PIECE 11 — AUTO THUMBNAIL GENERATOR (the "same pattern on upload" piece).
+# Frame @1s + locked channel styling (dark top gradient + hook text in the
+# channel font/accent) = a 1280x720 thumbnail that looks like every other
+# thumbnail on the channel. "The template is a set of visual rules."
+# ==============================================================================
+def _finish_thumbnail(frame_path, out_path, hook_text, accent_rgb):
+    """PIL body of the thumbnail (kept separate so the frame file has a
+    guaranteed try/finally cleanup in generate_thumbnail)."""
+    img = Image.open(frame_path).convert("RGBA")
+    img = img.resize((1280, 720))
+    # 1) darken the top band so the hook text reads (locked rule)
+    dark = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    dd = ImageDraw.Draw(dark)
+    Wd, Hd = img.size
+    for y in range(min(340, Hd)):
+        dd.line([(0, y), (Wd, y)], fill=(0, 0, 0, int(175 * (1 - y / 340))))
+    img = Image.alpha_composite(img, dark)
+    d = ImageDraw.Draw(img, "RGBA")
+    # 2) hook text: first 2-3 meaningful words, UPPERCASE, channel font + accent
+    words = re.sub(r"\[.*?\]", "", str(hook_text or "")).split()[:3]
+    words = [w for w in words if len(w) > 2] or (str(hook_text or "WATCH THIS").split()[:2])
+    txt = " ".join(words).upper() or "WATCH THIS"
+    # 3) size-to-fit (max width 1160), channel accent color
+    size = 110
+    font = None
+    while size > 40:
+        font = None
+        fp = se.get_font_path(size, bold=True) if se else None
+        try:
+            font = ImageFont.truetype(fp, size) if fp else ImageFont.load_default(size=size)
+        except Exception:
+            font = ImageFont.load_default()
+        bbox = d.textbbox((0, 0), txt, font=font, stroke_width=6)
+        if bbox[2] - bbox[0] <= 1160:
+            break
+        size -= 4
+    tw = d.textbbox((0, 0), txt, font=font, stroke_width=6)
+    tw_w = tw[2] - tw[0]
+    d.text(((1280 - tw_w) // 2 - tw[0], 60 - tw[1]), txt, font=font,
+           fill=tuple(accent_rgb) + (255,), stroke_width=6, stroke_fill=(0, 0, 0, 255))
+    # 4) small accent bar (locked channel signature mark)
+    d.rectangle([(60, 40), (68, 120)], fill=tuple(accent_rgb) + (255,))
+    img.convert("RGB").save(out_path, quality=90)
+    return out_path
+
+
+def generate_thumbnail(video_path, hook_text, accent_rgb=(255, 215, 0), out_path=None):
+    try:
+        try:
+            import imageio_ffmpeg
+            ff = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            ff = "ffmpeg"
+        if out_path is None:
+            out_path = video_path.rsplit(".", 1)[0] + "_thumbnail.jpg"
+        frame_path = out_path.replace("_thumbnail.jpg", "_frame_tmp.jpg")
+        subprocess.run(
+            [ff, "-y", "-loglevel", "error", "-ss", "1.0", "-i", video_path,
+             "-frames:v", "1", "-vf", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720",
+             frame_path], check=True, timeout=90,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            return _finish_thumbnail(frame_path, out_path, hook_text, accent_rgb)
+        finally:
+            _force_delete(frame_path)   # B5: temp frame removed even on crash
+    except Exception as e:
+        print(f"[Thumbnail] generation failed: {e}")
+        return None
+
+
 def generate_sub_bass_wav(path, duration, frequency=40, sample_rate=44100):
     import wave
     import struct
@@ -656,19 +1346,19 @@ def make_micro_meme_sticker(meme_type):
     draw.rounded_rectangle(
         [(10, 10), (width - 10, height - 10)],
         radius=20,
-        fill=(15, 23, 42, 230), # iOS Navy Dark
+        fill=(15, 23, 42, 255), # solid dark
         outline=(255, 215, 0, 255), # Gold
         width=3
     )
     
-    # Clean up name for text rendering
-    text = f"🚨 {meme_type.upper().replace('_', ' ')}"
+    # Clean up name for text rendering (NO EMOJI — Windows renders them as broken boxes)
+    text = meme_type.upper().replace("_", " ")
     from PIL import ImageFont
     try:
         font = ImageFont.load_default(size=24)
-    except:
+    except TypeError:
         font = ImageFont.load_default()
-        
+
     text_w = len(text) * 12
     text_x = (width - text_w) // 2
     text_y = (height - 34) // 2
@@ -686,7 +1376,7 @@ def make_save_trigger_card(points_text, duration):
     draw.rounded_rectangle(
         [(15, 15), (width - 15, height - 15)],
         radius=30,
-        fill=(15, 23, 42, 245), # iOS Navy Dark
+        fill=(15, 23, 42, 255), # solid dark
         outline=(255, 215, 0, 255), # Gold
         width=5
     )
@@ -694,14 +1384,14 @@ def make_save_trigger_card(points_text, duration):
     # Title
     from PIL import ImageFont
     try: font_title = ImageFont.load_default(size=28)
-    except: font_title = ImageFont.load_default()
+    except TypeError: font_title = ImageFont.load_default()
     
-    draw.text((45, 45), "⚠️ SAVE TO LOCK MOMENTUM", fill=(255, 215, 0, 255), font=font_title)
+    draw.text((45, 45), "SAVE TO LOCK MOMENTUM", fill=(255, 215, 0, 255), font=font_title)
     
     # Parse points
     points = [p.strip() for p in points_text.split('|')]
     try: font_body = ImageFont.load_default(size=22)
-    except: font_body = ImageFont.load_default()
+    except TypeError: font_body = ImageFont.load_default()
     
     y_offset = 120
     for idx, pt in enumerate(points[:3]):
@@ -712,23 +1402,45 @@ def make_save_trigger_card(points_text, duration):
     img_arr = np.array(img)
     return ImageClip(img_arr).with_duration(duration)
 
-# --- DRAMATIC COGNITIVE SOUND DROP ENGINE ---
+# --- DRAMATIC COGNITIVE SOUND DROP ENGINE (v2: smooth sidechain dip, not a hard gate) ---
+# Old version slammed music to 8% for 0.4s — to the ear that sounds like a volume glitch
+# (the #1 skip trigger). New version: smooth dip to 55% with 100ms attack / 400ms release,
+# like the sidechain breathing used in elite faceless edits.
 def apply_sound_drop_ducking(music_clip, drop_times):
     if not drop_times:
         return music_clip
-        
+
+    DIP_DEPTH = 0.45   # music swells down to 55%
+    ATTACK = 0.10      # 100ms smooth down
+    RELEASE = 0.40     # 400ms smooth back
+
+    def gain_at(t):
+        g = 1.0
+        for dt in drop_times:
+            if dt <= t < dt + ATTACK + RELEASE:
+                if t < dt + ATTACK:
+                    g = min(g, 1.0 - DIP_DEPTH * ((t - dt) / ATTACK))
+                else:
+                    g = min(g, (1.0 - DIP_DEPTH) + DIP_DEPTH * ((t - dt - ATTACK) / RELEASE))
+        return g
+
     def volume_filter(t):
         if isinstance(t, np.ndarray):
-            mask = np.ones_like(t, dtype=float)
+            out = np.ones_like(t, dtype=float)
             for dt in drop_times:
-                mask[(t >= dt) & (t <= dt + 0.4)] = 0.08
-            return np.expand_dims(mask, axis=-1)
-        else:
-            for dt in drop_times:
-                if dt <= t <= dt + 0.4:
-                    return 0.08
-            return 1.0
-            
+                lo, hi = dt, dt + ATTACK + RELEASE
+                m = (t >= lo) & (t < hi)
+                if m.any():
+                    tt = t[m]
+                    g = np.where(
+                        tt < dt + ATTACK,
+                        1.0 - DIP_DEPTH * ((tt - dt) / ATTACK),
+                        (1.0 - DIP_DEPTH) + DIP_DEPTH * ((tt - dt - ATTACK) / RELEASE)
+                    )
+                    out[m] = np.minimum(out[m], g)
+            return np.expand_dims(out, axis=-1)
+        return gain_at(t)
+
     # Ultimate Cross-Version Compatibility (supports MoviePy 1.x, MoviePy 2.x, and custom subclasses!)
     if hasattr(music_clip, "transform"):
         return music_clip.transform(lambda gf, t: gf(t) * volume_filter(t))
@@ -741,6 +1453,45 @@ def apply_sound_drop_ducking(music_clip, drop_times):
             return frames * volume_filter(t)
         music_clip.get_frame = new_get_frame
         return music_clip
+
+
+# --- ENERGY ARC ENVELOPE: quiet hook -> build -> peak at reveal -> quiet loop ---
+def apply_energy_arc(music_clip, peak_t=None, total_duration=30.0):
+    if peak_t is None:
+        peak_t = max(5.0, total_duration * 0.75)
+
+    def arc_gain(t):
+        # 0-2.5s: fade in to 40% (voice-only hook)
+        # 2.5s -> peak-2s: build 40% -> 75%
+        # peak-2s -> peak: push to 100%
+        # peak -> peak+1.5s: crash to 40%
+        # after: quiet 40% (loop tail)
+        if t < 2.5:
+            return 0.4 * (t / 2.5)
+        build_start, build_end = 2.5, max(4.0, peak_t - 2.0)
+        if t < build_end:
+            k = (t - build_start) / max(0.1, build_end - build_start)
+            return 0.4 + 0.35 * k
+        if t < peak_t:
+            k = (t - build_end) / max(0.1, peak_t - build_end)
+            return 0.75 + 0.25 * k
+        if t < peak_t + 1.5:
+            return 1.0 - 0.6 * ((t - peak_t) / 1.5)
+        return 0.4
+
+    def volume_filter(t):
+        if isinstance(t, np.ndarray):
+            out = np.ones_like(t, dtype=float)
+            for i, ti in enumerate(t):
+                out[i] = arc_gain(float(ti))
+            return np.expand_dims(out, axis=-1)
+        return arc_gain(float(t))
+
+    if hasattr(music_clip, "transform"):
+        return music_clip.transform(lambda gf, t: gf(t) * volume_filter(t))
+    elif hasattr(music_clip, "fl"):
+        return music_clip.fl(lambda gf, t: gf(t) * volume_filter(t))
+    return music_clip
 
 # --- SPEECH CLEANER ---
 def clean_script_for_speech(script_text):
@@ -756,94 +1507,240 @@ def clean_script_for_speech(script_text):
     return re.sub(r'\[.*?\]', '', " ".join(cleaned)).strip()
 
 # --- PROACTIVE THREADED ELEVENLABS SPEECH GENERATOR ---
-def generate_elevenlabs_audio(text, api_key, output_basename="voice"):
+# VOICE PRESETS (Piece 7 — "tones"): voice_id + per-preset tone settings.
+# Research consensus (2026): V3 model, stability 35%, similarity 78%,
+# style exaggeration 20%, speaker boost ON = the "human tone" that V1 never had.
+VOICE_PRESETS = {
+    "Deep Narrator Male": {
+        "voice_id": "ErXwobaYiN019PkySvjV",          # Adam
+        "settings": {"stability": 0.35, "similarity_boost": 0.78, "style": 0.20, "speaker_boost": True},
+        "speed": 0.98,
+    },
+    "Energetic Male": {
+        "voice_id": "pNInz6obpgDQGcFmaJgB",          # Antoni
+        "settings": {"stability": 0.40, "similarity_boost": 0.78, "style": 0.25, "speaker_boost": True},
+        "speed": 1.05,
+    },
+    "Warm Female": {
+        "voice_id": "EXAVITQu4vr4xnSDxMaL",          # Sarah
+        "settings": {"stability": 0.38, "similarity_boost": 0.78, "style": 0.20, "speaker_boost": True},
+        "speed": 1.0,
+    },
+    "Calm British Female": {
+        "voice_id": "nwTfqZTgqMn136RyYiYO",          # Alice
+        "settings": {"stability": 0.42, "similarity_boost": 0.75, "style": 0.15, "speaker_boost": True},
+        "speed": 0.97,
+    },
+}
+
+
+# B2 FIX: model chain instead of one hardcoded model.
+# eleven_v3 = best human tone (may need a paid tier depending on account)
+# eleven_multilingual_v2 / turbo = always available, still human.
+# Every fallback prints LOUDLY so you know which engine actually served the voice.
+ELEVEN_MODEL_CHAIN = ["eleven_v3", "eleven_multilingual_v2", "eleven_turbo_v2_5"]
+
+
+def _eleven_settings_for_model(preset, model):
+    """v3 uses `speaker_boost`; v1/v2 use `use_speaker_boost` (different key)."""
+    s = dict(preset["settings"])
+    if model != "eleven_v3":
+        s["use_speaker_boost"] = s.pop("speaker_boost", True)
+    return s
+
+
+def generate_elevenlabs_audio(text, api_key, output_basename="voice", voice_preset="Deep Narrator Male"):
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
-    
-    voice_id = "ErXwobaYiN019PkySvjV" 
+
+    preset = VOICE_PRESETS.get(voice_preset, VOICE_PRESETS["Deep Narrator Male"])
+    voice_id = preset["voice_id"]
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
         "Accept": "audio/mpeg",
         "Content-Type": "application/json",
         "xi-api-key": api_key
     }
-    data = {
-        "text": text,
-        "model_id": "eleven_monolingual_v1",
-        "voice_settings": {
-            "stability": 0.45,
-            "similarity_boost": 0.75
+    last_err = "unknown"
+    for model in ELEVEN_MODEL_CHAIN:
+        data = {
+            "text": text,
+            "model_id": model,
+            "voice_settings": _eleven_settings_for_model(preset, model),
+            "speed": preset["speed"],
         }
-    }
-    try:
-        r = requests.post(url, json=data, headers=headers, timeout=40)
+        try:
+            r = requests.post(url, json=data, headers=headers, timeout=60)
+        except Exception as e:
+            last_err = str(e)
+            print(f"[Voice] ElevenLabs {model} network error: {e} — trying next model...")
+            continue
         if r.status_code == 200:
+            if model != "eleven_v3":
+                print(f"[Voice] ⚠ ElevenLabs V3 unavailable — served this voice with {model} "
+                      f"(still human, slightly less emotional). Check your plan/key for V3.")
             with open(audio_path, "wb") as f_aud:
                 f_aud.write(r.content)
-                
+
             audio_clip = AudioFileClip(audio_path)
             duration = audio_clip.duration
             audio_clip.close()
-            
+
             words = text.split()
             total_chars = sum(len(w) for w in words)
             start_time = 0.0
-            
+
             with open(srt_path, "w", encoding="utf-8") as f_srt:
                 for idx, w in enumerate(words):
                     w_dur = (len(w) / total_chars) * duration if total_chars > 0 else duration / len(words)
                     end_time = min(start_time + w_dur, duration)
-                    
+
                     def format_time(seconds):
                         hours = int(seconds // 3600)
                         minutes = int((seconds % 3600) // 60)
                         secs = int(seconds % 60)
                         millis = int((seconds % 1) * 1000)
                         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
-                        
+
                     f_srt.write(f"{idx+1}\n")
                     f_srt.write(f"{format_time(start_time)} --> {format_time(end_time)}\n")
                     f_srt.write(f"{w.upper()}\n\n")
                     start_time = end_time
-                    
+
             return audio_path, srt_path
-    except Exception as e:
-        print(f"ElevenLabs TTS failed: {e}. Falling back.")
+        # 401/403/404 = key or voice problem — a different model won't help
+        if r.status_code in (401, 403, 404):
+            last_err = f"HTTP {r.status_code} ({r.text[:160]}) — likely key/plan/voice problem"
+            break
+        last_err = f"HTTP {r.status_code} ({r.text[:160]})"
+        print(f"[Voice] ElevenLabs {model} failed ({r.status_code}) — trying next model...")
+    print(f"[Voice] ❌ ElevenLabs unusable: {last_err}. Voice falls back to edge-tts.")
     return None, None
 
+# --- WORD-LEVEL SRT BUILDERS (fixes edge-tts 7.x: WordBoundary events are gone,
+#     replaced by SentenceBoundary events — this is why captions were missing) ---
+def _write_word_srt(cues, srt_path):
+    def fmt(s):
+        s = max(0.0, float(s))
+        h = int(s // 3600); m = int((s % 3600) // 60); sec = int(s % 60); ms = int((s % 1) * 1000)
+        return f"{h:02d}:{m:02d}:{sec:02d},{ms:03d}"
+    with open(srt_path, "w", encoding="utf-8") as f:
+        for i, (s, e, t) in enumerate(cues):
+            f.write(f"{i+1}\n{fmt(s)} --> {fmt(e)}\n{t}\n\n")
+
+
+def _sentence_to_word_cues(sentence_cues):
+    """Spread each SentenceBoundary window (100ns ticks) over its words,
+    proportional to word length — reconstructs word-level timing."""
+    cues = []
+    for off, dur, txt in sentence_cues:
+        words = str(txt or "").split()
+        if not words:
+            continue
+        t0 = off / 1e7
+        t1 = t0 + (dur / 1e7 if dur else 0.4 * len(words))
+        span = max(t1 - t0, 0.12 * len(words))
+        total_chars = sum(len(w) + 1 for w in words)
+        tcur = t0
+        for w in words:
+            wspan = span * (len(w) + 1) / total_chars
+            cues.append((tcur, tcur + wspan, w))
+            tcur += wspan
+    return cues
+
+
 # --- NATIVE PYTHON TTS GENERATOR ---
-def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice", eleven_key=None):
+def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice", eleven_key=None, voice_preset="Deep Narrator Male"):
     if eleven_key and eleven_key.strip():
-        print("Calling premium ElevenLabs voiceover...")
-        aud_path, s_path = generate_elevenlabs_audio(text, eleven_key, output_basename)
+        print(f"Calling premium ElevenLabs voiceover (V3, preset: {voice_preset})...")
+        aud_path, s_path = generate_elevenlabs_audio(text, eleven_key, output_basename, voice_preset=voice_preset)
         if aud_path and os.path.exists(aud_path):
             return aud_path, s_path
-            
+        print("[Voice] ⚠ ElevenLabs failed for the whole model chain — using edge-tts fallback (robotic voice, no V3 tone).")
+
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
-    
+
+    boundary_data = {"word_srt": "", "sentences": []}
+
     async def amain():
-        communicate = edge_tts.Communicate(text, voice_name)
-        submaker = edge_tts.SubMaker()
+        # B1 FIX (P0): edge-tts 7.2+ changed the DEFAULT boundary from
+        # WordBoundary to SentenceBoundary → SubMaker received zero word
+        # events → captions silently degraded to char-weighted estimates.
+        # Pin WordBoundary explicitly; TypeError fallback for 6.x/early 7.x.
+        try:
+            communicate = edge_tts.Communicate(text, voice_name, boundary="WordBoundary")
+        except TypeError:
+            communicate = edge_tts.Communicate(text, voice_name)
+        try:
+            submaker = edge_tts.SubMaker()
+        except Exception:
+            submaker = None
         with open(audio_path, "wb") as f_aud:
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
                     f_aud.write(chunk["data"])
-                elif chunk["type"] == "WordBoundary":
+                elif chunk["type"] == "WordBoundary" and submaker is not None:
                     submaker.feed(chunk)
-                    
-        with open(srt_path, "w", encoding="utf-8") as f_sub:
-            f_sub.write(submaker.get_srt())
-            
+                elif chunk["type"] == "SentenceBoundary":
+                    boundary_data["sentences"].append(
+                        (chunk.get("offset", 0), chunk.get("duration", 0), chunk.get("text", "")))
+        if submaker is not None:
+            try:
+                boundary_data["word_srt"] = submaker.get_srt()
+            except Exception:
+                boundary_data["word_srt"] = ""
+
     try:
         run_async_in_thread(amain())
+        # --- Build the word-level SRT: WordBoundary -> SentenceBoundary -> even-spread fallback ---
+        if boundary_data["word_srt"].strip():
+            with open(srt_path, "w", encoding="utf-8") as f_sub:
+                f_sub.write(boundary_data["word_srt"])
+        elif boundary_data["sentences"]:
+            _write_word_srt(_sentence_to_word_cues(boundary_data["sentences"]), srt_path)
+        else:
+            try:
+                a = AudioFileClip(audio_path)
+                total = a.duration
+                a.close()
+                words = text.split()
+                total_chars = sum(len(w) + 1 for w in words) or 1
+                tcur = 0.0
+                cues = []
+                for w in words:
+                    wspan = total * (len(w) + 1) / total_chars
+                    cues.append((tcur, tcur + wspan, w))
+                    tcur += wspan
+                _write_word_srt(cues, srt_path)
+            except Exception:
+                open(srt_path, "w").close()
         return audio_path, srt_path
     except Exception as e:
         print(f"Native edge-tts failed: {e}. Falling back to gTTS.")
-        from gtts import gTTS
         try:
+            from gtts import gTTS
             gTTS(text=text, lang='en').save(audio_path)
-            return audio_path, None
+            # B4 FIX (P0): NEVER return srt=None. parse_vtt(None)=[] silently
+            # killed the ENTIRE caption/beat/SFX/broll-sync layer. gTTS gives
+            # no word timings, so build a char-weighted word-level SRT — the
+            # whole visual layer now always renders, at worst slightly soft sync.
+            try:
+                _a = AudioFileClip(audio_path)
+                _total = _a.duration
+                _a.close()
+            except Exception:
+                _total = 0.30 * max(1, len(text.split()))
+            _words = text.split() or ["..."]
+            _tot_chars = sum(len(w) + 1 for w in _words) or 1
+            _tcur, _cues = 0.0, []
+            for _w in _words:
+                _ws = _total * (len(_w) + 1) / _tot_chars
+                _cues.append((_tcur, _tcur + _ws, _w))
+                _tcur += _ws
+            _write_word_srt(_cues, srt_path)
+            print("[Voice] ⚠ gTTS fallback active (Google robotic voice) — captions use estimated word timing.")
+            return audio_path, srt_path
         except Exception as ge:
             print(f"gTTS fallback failed: {ge}")
             return None, None
@@ -864,37 +1761,75 @@ def parse_vtt(vtt_path):
     return subtitles
 
 # --- MATHEMATICALLY PERFECT VERTICAL SCALER, CROPPER & COLOR UNIFIER ---
-def make_vertical_clip(clip, target_w=720, target_h=1280):
+def _subject_anchor_x1(clip, w, h, new_w):
+    """PIECE 6 — SUBJECT-ANCHOR CROP: instead of dead-center (which slices
+    faces/objects), find the highest visual-energy column band (detail +
+    saturation = where the subject is) and anchor the 9:16 crop around it.
+    Falls back to center on any failure."""
+    try:
+        dur = clip.duration
+        cols = 12
+        profile = np.zeros(cols, dtype=float)
+        n_samples = 0
+        for frac in (0.1, 0.5, 0.9):
+            st = min(max(dur * frac, 0.01), dur - 0.01)
+            try:
+                f = clip.get_frame(st)
+            except Exception:
+                continue
+            small = f[:max(h // 8, 16), :max(w // 8, 16)]
+            col_lum = 0.2126 * small[..., 0].astype(float) + 0.7152 * small[..., 1].astype(float) + 0.0722 * small[..., 2].astype(float)
+            col_var = col_lum.std(axis=0)
+            mx = small.max(axis=0).astype(float)
+            mn = small.min(axis=0).astype(float)
+            sat = ((mx - mn) / np.maximum(mx, 1e-6)).mean(axis=0)
+            profile += col_var + sat
+            n_samples += 1
+        if n_samples == 0 or profile.sum() <= 0:
+            return (w - new_w) // 2
+        profile = profile / profile.sum()
+        best = int(np.argmax(profile))
+        col_w = w / cols
+        center_anchor = (best + 0.5) * col_w
+        ideal = int(center_anchor - new_w / 2)
+        # clamp: never more than 25% of the crop width off-center
+        max_off = int(new_w * 0.25)
+        ideal = max((w - new_w) // 2 - max_off, min(ideal, (w - new_w) // 2 + max_off))
+        return max(0, min(ideal, w - new_w))
+    except Exception:
+        return (w - new_w) // 2
+
+
+def make_vertical_clip(clip, target_w=720, target_h=1280, dark_blend=False, exposure_gain=1.0):
     w, h = clip.size
     target_aspect = target_w / target_h
     current_aspect = w / h
     
     if current_aspect > target_aspect:
         new_w = int(h * target_aspect)
-        cropped_clip = clip.cropped(x1=(w - new_w) // 2, y1=0, width=new_w, height=h)
+        x1 = _subject_anchor_x1(clip, w, h, new_w)
+        cropped_clip = clip.cropped(x1=x1, y1=0, width=new_w, height=h)
     else:
         new_h = int(w / target_aspect)
         cropped_clip = clip.cropped(x1=0, y1=(h - new_h) // 2, width=w, height=new_h)
         
     resized_clip = cropped_clip.resized(width=target_w, height=target_h)
-    
-    # --- DYNAMIC MOVIE-GRID MAP_FRAMES FUNCTION COMPATIBLE WITH ALL MOVIEPY BUILDS ---
-    def apply_luxury_lut_frame(frame):
-        arr = frame.astype(float)
-        arr[:, :, 0] *= 0.76  # Rich Red/Gold
-        arr[:, :, 1] *= 0.70  # Gold Green
-        arr[:, :, 2] *= 0.58  # Slate Blue (desaturated)
-        return np.clip(arr, 0, 255).astype('uint8')
-        
-    try:
-        darkened_clip = resized_clip.map_frames(apply_luxury_lut_frame)
-        return darkened_clip
-    except Exception as e:
-        print(f"map_frames failed, falling back to standard MoviePy fl_image: {e}")
+
+    # --- PREMIUM DARK GRADE (cross-version safe) + PRO PASS 5 primary
+    #     correction (exposure match so every clip sits at the same level) ---
+    if se is not None:
+        grade_fn = se.grade_clip_dark(0.72) if dark_blend else se.grade_frame
         try:
-            return resized_clip.fl_image(apply_luxury_lut_frame)
-        except:
-            return resized_clip
+            if exposure_gain != 1.0:
+                def _graded(gf, t):
+                    f = gf(t)
+                    f = np.clip(f.astype(float) * exposure_gain, 0, 255).astype('uint8')
+                    return grade_fn(f)
+                return se.clip_fl(resized_clip, _graded)
+            return se.clip_fl(resized_clip, lambda gf, t: grade_fn(gf(t)))
+        except Exception as e:
+            print(f"[Grade] transform failed ({e}); returning ungraded clip")
+    return resized_clip
 
 # --- DYNAMIC WORD-BY-WORD CHOPPER ---
 def split_subtitles_into_words(subtitles, words_per_clip=1):
@@ -989,6 +1924,51 @@ def generate_synthetic_whoosh_sound(duration=0.45, start_freq=150, end_freq=1100
         
     return sfx_path
 
+# --- RANGE-SAFE SFX CLIP (precomputes the whole SFX into memory — completely
+#     avoids a MoviePy 2.x FFmpegAudioReader bug where chunked reads inside a
+#     short clip's window crash with a confusing "t=1.00-1.00" boolean-mask error) ---
+def make_safe_sfx_clip(path, start_t, total_duration, volume=0.3):
+    # Read the WAV directly with the stdlib wave module — 100% bypasses the
+    # MoviePy 2.x FFmpegAudioReader chunk-split bug on short files.
+    import wave as _wavemod
+    samples = None
+    sr, nch = 44100, 2
+    try:
+        with _wavemod.open(path, "rb") as _wf:
+            nch = _wf.getnchannels()
+            sr = _wf.getframerate()
+            raw = _wf.readframes(_wf.getnframes())
+        samples = np.frombuffer(raw, dtype=np.int16).astype(float) / 32768.0
+        samples = samples.reshape(-1, nch)
+    except Exception:
+        # Not a WAV (e.g. meme MP3) — fall back to MoviePy soundarray
+        try:
+            base = AudioFileClip(path)
+            sr = base.fps if isinstance(base.fps, (int, float)) else 44100
+            nch = base.nchannels
+            samples = base.to_soundarray(fps=sr, quantize=False)
+            try:
+                base.close()
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[SFX] Could not load {os.path.basename(path)}: {e} — using silent clip")
+            samples = np.zeros((int(sr), nch), dtype=float)
+    n_samples = max(1, len(samples))
+
+    def ff(t):
+        tarr = np.atleast_1d(np.asarray(t, dtype=float))
+        local = tarr - start_t
+        out = np.zeros((len(tarr), nch), dtype=float)
+        idx = np.round(local * sr).astype(int)
+        m = (local >= 0) & (local < n_samples / sr)
+        if m.any():
+            out[m] = samples[np.clip(idx[m], 0, n_samples - 1)]
+        return out * volume
+
+    return AudioClip(ff, duration=total_duration, fps=sr)
+
+
 # --- CINEMATIC VISUAL PROGRESS BAR OVERLAY ---
 def make_progress_bar_clip(duration, width=720, height=1280, bar_height=10, bar_color=(255, 45, 85)):
     def make_frame(t):
@@ -1011,36 +1991,66 @@ def make_progress_bar_clip(duration, width=720, height=1280, bar_height=10, bar_
         return np.array(img)
     return VideoClip(make_frame, duration=duration)
 
-# --- UPGRADED CAPTIONS GENERATOR (WITH AD-HD POWER WORDS + SFX TRIGGERS + DYNAMIC PRESETS) ---
-def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='yellow', caption_style='standard'):
+# --- UPGRADED CAPTIONS GENERATOR (ADHD POWER WORDS + SEMANTIC COLOUR CODE + SFX TRIGGERS) ---
+def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='yellow', caption_style='standard', total_duration=60.0, accent_rgb=(255, 215, 0), sfx_level=1.0):
     display_subs = subtitles
     actual_font_size = font_size
     caption_theme = str(caption_style).lower()
     
     is_word_pop = "hormozi" in caption_theme or "cyberpunk" in caption_theme or "word_pop" in caption_theme
-    
-    if is_word_pop:
+    is_cinematic = "cinematic" in caption_theme
+
+    if is_cinematic:
+        # Reference #3 style: sentence-level phrases (3 words), no spring bounce,
+        # calm gold/white — the narration stays the star
+        display_subs = split_subtitles_into_words(subtitles, words_per_clip=3)
+        actual_font_size = int(font_size * 1.05)
+    elif is_word_pop:
         display_subs = split_subtitles_into_words(subtitles, words_per_clip=1)
         actual_font_size = int(font_size * 0.95) # Compact fitting
-        
+
+    # --- ROBUST FONT RESOLUTION (bundled repo fonts first — works on ANY OS) ---
+    if se is not None:
+        font_name = se.get_font_path(actual_font_size, bold=True) or se.get_font_path(actual_font_size, bold=False)
+    else:
+        font_name = None
+    if not font_name:
+        font_name = "DejaVu Sans"
+
     text_clips = []
     sfx_clips = []
     pop_sfx_path = generate_synthetic_pop_sound()
-    
+
+    # POWER WORDS — emphasis via COLOR + SIZE only (no emoji: Windows renders them as broken boxes)
     POWER_WORDS = {
-        "money": "💰", "cash": "💵", "wealth": "💸", "rich": "💰", "billionaire": "👑", "billionaires": "👑",
-        "fail": "❌", "mistake": "❌", "mistakes": "❌", "wrong": "🚫", "destroy": "💥", "destroying": "💥",
-        "secret": "🤫", "secrets": "🤫", "hidden": "🔍", "truth": "💯", "bizarre": "👽",
-        "top": "🥇", "elite": "👑", "success": "📈", "grow": "📈", "growth": "📈",
-        "brain": "🧠", "neuroscientist": "🔬", "psychology": "🧠", "mind": "🧠",
-        "focus": "🎯", "goal": "🎯", "goals": "🎯",
-        "shock": "😱", "shocked": "😱", "shocking": "😱",
-        "stop": "🛑", "danger": "⚠️", "warn": "⚠️", "warning": "⚠️",
-        "willpower": "💪", "discipline": "🛡️", "unstoppable": "⚡", "relentless": "⚡",
-        "fire": "🔥", "hot": "🔥", "burn": "🔥"
+        "money", "cash", "wealth", "rich", "billionaire", "billionaires",
+        "fail", "mistake", "mistakes", "wrong", "destroy", "destroying",
+        "secret", "secrets", "hidden", "truth", "bizarre",
+        "top", "elite", "success", "grow", "growth",
+        "brain", "neuroscientist", "psychology", "mind",
+        "focus", "goal", "goals",
+        "shock", "shocked", "shocking",
+        "stop", "danger", "warn", "warning",
+        "willpower", "discipline", "unstoppable", "relentless",
+        "fire", "hot", "burn"
     }
-    
-    tick_vol = float(db_settings.get_setting("tick_volume", 0.18))
+    # GAP-FIX: SEMANTIC COLOUR CODE — warnings turn RED, gains turn GREEN, numbers take the ACCENT
+    WARN_WORDS = {
+        "wrong", "mistake", "mistakes", "lie", "lies", "stop", "never", "danger", "dangerous",
+        "fail", "fails", "failing", "failed", "kill", "kills", "killing", "lose", "loses",
+        "trapped", "trap", "traps", "scam", "bad", "poison", "debt", "poor", "lazy", "weak",
+        "broken", "dead", "zero", "shut", "waste", "wasting", "stuck", "overthinking", "overload"
+    }
+    GAIN_WORDS = {
+        "free", "double", "gains", "gain", "elite", "focus", "focused", "success", "grow",
+        "growth", "wealth", "rich", "win", "wins", "fast", "faster", "instant", "unlock",
+        "unlocking", "secret", "secrets", "truth", "power", "control", "momentum", "boost",
+        "level", "levels", "proof", "result", "results", "simple", "easy"
+    }
+    accent_hex = "#%02X%02X%02X" % tuple(accent_rgb)
+
+    tick_vol = float(db_settings.get_setting("tick_volume", 0.18)) * sfx_level
+    power_tick_budget = 3   # v3: max 3 pop-ticks per video (SFX spam = skip trigger)
     
     for s in display_subs:
         duration = s['end'] - s['start']
@@ -1052,63 +2062,104 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
         word_color = color
         word_size = actual_font_size
         stroke_color = "black"
-        stroke_width = 4
+        stroke_width = 3   # PRO STANDARD: 2-4px outline (piece 3 caption lock)
         is_power = False
         
         if "cyberpunk" in caption_theme:
             word_color = "#00FFFF"
-            if clean_w in POWER_WORDS:
-                txt, word_color, word_size, is_power = f"⚡ {txt}", "#FF00FF", int(actual_font_size * 1.15), True
+            if re.search(r"\d", txt) or "%" in txt:
+                word_color, word_size, is_power = accent_hex, int(actual_font_size * 1.15), True
+            elif clean_w in WARN_WORDS:
+                word_color, is_power = "#FF4D4D", True
+            elif clean_w in GAIN_WORDS:
+                word_color, word_size, is_power = "#00E676", int(actual_font_size * 1.12), True
         elif "minimalist" in caption_theme:
             word_color, stroke_width = "#FFFFFF", 2
-            if clean_w in POWER_WORDS:
-                word_color, word_size, is_power = "#F5921D", int(actual_font_size * 1.10), True
+            if re.search(r"\d", txt) or "%" in txt:
+                word_color, word_size, is_power = accent_hex, int(actual_font_size * 1.15), True
+            elif clean_w in WARN_WORDS:
+                word_color, is_power = "#FF4D4D", True
+            elif clean_w in GAIN_WORDS or clean_w in POWER_WORDS:
+                word_color, word_size, is_power = "#00E676", int(actual_font_size * 1.10), True
         else:
-            if clean_w in POWER_WORDS:
-                txt, word_color, word_size, is_power = f"{POWER_WORDS[clean_w]} {txt}", "#39FF14", int(actual_font_size * 1.18), True
-            
-        txt_clip = TextClip(
-            text=txt, 
-            font="Georgia", 
-            font_size=word_size, 
-            color=word_color, 
-            stroke_color=stroke_color, 
-            stroke_width=stroke_width, 
-            method='caption', 
-            size=(target_w - 120, None), 
-            text_align='center'
-        )
-        
+            if is_cinematic:
+                # Cinematic: white base, GOLD for numbers/gains, red only for warnings
+                if re.search(r"\d", txt) or "%" in txt:
+                    word_color, word_size, is_power = "#D4AF37", int(actual_font_size * 1.12), True
+                elif clean_w in WARN_WORDS:
+                    word_color, word_size, is_power = "#FF4D4D", int(actual_font_size * 1.10), True
+                elif clean_w in GAIN_WORDS or clean_w in POWER_WORDS:
+                    word_color, word_size, is_power = "#D4AF37", int(actual_font_size * 1.12), True
+            elif re.search(r"\d", txt) or "%" in txt:
+                word_color, word_size, is_power = accent_hex, int(actual_font_size * 1.18), True
+            elif clean_w in WARN_WORDS:
+                word_color, word_size, is_power = "#FF4D4D", int(actual_font_size * 1.14), True
+            elif clean_w in GAIN_WORDS or clean_w in POWER_WORDS:
+                word_color, word_size, is_power = "#39FF14", int(actual_font_size * 1.18), True
+
+        # v3 FIX: captions are rendered as complete PIL images — MoviePy's
+        # TextClip size math ignores stroke width and SLICES the bottom of
+        # the glyphs (the "half-cut captions" bug). PIL gives exact bounds.
+        txt_clip = None
+        if se is not None:
+            try:
+                from PIL import ImageColor
+                c = ImageColor.getrgb(word_color) if isinstance(word_color, str) else tuple(word_color)[:3]
+                cap_img = se.render_text_image(
+                    txt,
+                    font_size=word_size,
+                    color=tuple(c),
+                    outline_color=(0, 0, 0),
+                    outline_width=stroke_width + 1,
+                )
+                txt_clip = ImageClip(np.array(cap_img), transparent=True)
+            except Exception as cap_e:
+                print(f"[Captions] PIL render failed ({cap_e}); using TextClip")
+        if txt_clip is None:
+            txt_clip = TextClip(
+                text=txt,
+                font=font_name,
+                font_size=word_size,
+                color=word_color,
+                stroke_color=stroke_color,
+                stroke_width=stroke_width + 1,
+                method='caption',
+                size=(target_w - 120, None),
+                text_align='center'
+            )
+
         try:
-            if "minimalist" not in caption_theme:
+            if "minimalist" not in caption_theme and "cinematic" not in caption_theme:
                 # Upgraded: High-fidelity organic spring bounce scales from 0.85 up to 1.12, then settles smoothly to 1.0!
                 bouncy_txt_clip = txt_clip.resized(lambda t: (0.85 + 0.27 * np.sin(t * (np.pi / 0.15))) if t < 0.15 else 1.0)
             else:
                 bouncy_txt_clip = txt_clip
-        except:
+        except Exception:
+            print("[Captions] bounce resize failed for one caption — using static text")
             bouncy_txt_clip = txt_clip
             
         text_clips.append(
             bouncy_txt_clip.with_duration(duration)
-                           .with_start(s['start'])
-                           .with_position(('center', 0.55))
+                           .with_start(max(0.0, s['start'] - 0.15))  # PRO: captions lead voice by 0.15s
+                           .with_position(('center', 940))  # PRO STANDARD: 65-75% down (73.4%), clears bottom UI zone
         )
         
-        if is_power:
+        if is_power and power_tick_budget > 0:
+            power_tick_budget -= 1
             try:
-                sfx_audio = AudioFileClip(pop_sfx_path).with_start(s['start']).with_volume_scaled(tick_vol)
+                sfx_audio = make_safe_sfx_clip(pop_sfx_path, s['start'], total_duration, tick_vol)
                 sfx_clips.append(sfx_audio)
-            except:
+            except Exception:
                 pass
-                
+
     return text_clips, sfx_clips
 
 def build_subtitle_clips(subtitles, target_w=720, font_size=55, color='yellow'):
     tc, _ = build_subtitle_and_sfx_clips(subtitles, target_w, font_size, color, caption_style='standard')
     return tc
 
-# --- SMART BACKGROUND AUDIO MIXER ---
-def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.10, drop_times=None):
+# --- SMART BACKGROUND AUDIO MIXER (v2: sidechain dips + energy arc) ---
+def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.10, drop_times=None, arc_peak_t=None, vtt_subs=None):
     voice_audio = AudioFileClip(voice_audio_path)
     
     if not bg_music_path or not os.path.exists(bg_music_path):
@@ -1125,10 +2176,40 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
         music_audio = concatenate_audioclips([music_audio] * loops_needed)
         
     music_audio = music_audio.with_duration(duration)
+
+    # v3 PRO: music arc = beat-locked intro swell × voice-duck "breathing"
+    # (fast attack / slow release) × build-to-climax peak × 1.5s outro fade
+    peak = arc_peak_t if arc_peak_t else duration * 0.65
+    duck_grid = None
+    if pe is not None and vtt_subs:
+        try:
+            duck_grid = pe.voice_duck_curve(vtt_subs, duration)
+        except Exception as e:
+            print(f"[ProEditor] duck curve failed: {e}")
+    if pe is not None:
+        try:
+            n_grid = int(duration * 50) + 2
+            arc_grid = np.array([
+                pe.music_arc_gain(i / 50.0, peak, None) *
+                ((duck_grid[i] if duck_grid is not None and i < len(duck_grid) else 1.0))
+                for i in range(n_grid)
+            ])
+            def arc_filter(gf, t):
+                if isinstance(t, np.ndarray):
+                    idx = np.clip((t * 50).astype(int), 0, len(arc_grid) - 1)
+                    return gf(t) * arc_grid[idx][:, None]
+                i = min(len(arc_grid) - 1, max(0, int(float(t) * 50)))
+                return gf(t) * arc_grid[i]
+            if hasattr(music_audio, "transform"):
+                music_audio = music_audio.transform(arc_filter)
+            elif hasattr(music_audio, "fl"):
+                music_audio = music_audio.fl(arc_filter)
+        except Exception as e:
+            print(f"[ProEditor] music arc failed: {e}")
     
-    # Upgrade: Apply Dynamic Sound Drop Ducking at specific timestamps!
+    # v2: Smooth sidechain dips (user [SOUND_DROP] tags + hook→value)
     if drop_times:
-        print(f"[Sound Drop Engine] Applying cinematic frequency drops at: {drop_times}")
+        print(f"[Sound Drop Engine] Applying smooth sidechain dips at: {[round(x,1) for x in drop_times]}")
         music_audio = apply_sound_drop_ducking(music_audio, drop_times)
         
     # Upgrade: Mix a continuous deep sub-bass atmospheric hum (40Hz) to create spherical auditory depth!
@@ -1150,8 +2231,13 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
     timestamp = int(time.time())
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_{timestamp}.mp4")
-    
+
     progress_cb = kwargs.get("progress_callback", None)
+
+    # B5 FIX: track per-cut temp segment files + their open readers.
+    # Old code created seg_{pid}_{ts}_{idx}.mp4 per cut and NEVER deleted them.
+    _seg_files = []
+    _seg_clips = []
     
     if progress_cb: progress_cb(0.05, "Cleaning script...")
     spoken_text = clean_script_for_speech(script_text)
@@ -1159,12 +2245,39 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     eleven_key = kwargs.get("elevenlabs_api_key", None)
     
     if progress_cb: progress_cb(0.15, "Generating high-fidelity neural speech voiceover...")
-    audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_hybrid", eleven_key=eleven_key)
+    audio_path, vtt_path = generate_tts_audio(spoken_text, voice_name, f"audio_{short_id}_hybrid", eleven_key=eleven_key, voice_preset=kwargs.get("voice_preset", "Deep Narrator Male"))
+
+    # Fail LOUD: if every TTS engine died (no internet, all keys dead) the old
+    # code crashed later with a cryptic ffmpeg error. Now it tells you why.
+    if not audio_path or not os.path.exists(audio_path):
+        if progress_cb: progress_cb(0.99, "Voice generation FAILED (all TTS engines down)")
+        raise RuntimeError(
+            "Voiceover generation failed — edge-tts, gTTS and ElevenLabs all failed. "
+            "Check internet connection, then re-check your ElevenLabs key in the sidebar."
+        )
+    # vtt_path None = TTS produced audio but no timing data; guard the pipeline
+    if not vtt_path or not os.path.exists(vtt_path):
+        print("[Voice] ⚠ No subtitle timing file produced — captions/broll-sync will run on estimates.")
+        vtt_path = None
+
+    # PRO PASS 4a — 7-step pro voice chain: HPF → EQ ×2 → compressor →
+    # de-esser → air → warmth saturation → glue. (the "warm human tone")
+    if pe is not None:
+        try:
+            chained = pe.apply_voice_chain(audio_path, out_dir=AUDIO_DIR)
+            if chained != audio_path:
+                print("[ProEditor] 7-step voice chain applied")
+                audio_path = chained
+        except Exception as e:
+            print(f"[ProEditor] voice chain skipped: {e}")
     
     db_caption_style = db_settings.get_setting("caption_style", "word_pop")
     db_music_volume = float(db_settings.get_setting("bg_music_volume", 0.12))
     db_font_size = int(db_settings.get_setting("font_size", 55))
     db_whoosh_volume = float(db_settings.get_setting("whoosh_volume", 0.12))
+    # PIECE 9 — SFX KNOB: one slider controls the entire SFX layer (0 = silent, 1 = full)
+    sfx_level = float(kwargs.get("sfx_level", 1.0))
+    db_whoosh_volume = db_whoosh_volume * sfx_level
     
     bg_music_path = kwargs.get("bg_music_path", None)
     bg_music_volume = kwargs.get("bg_music_volume", db_music_volume)
@@ -1173,12 +2286,14 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     # If no music is specified or "auto" is passed, we automatically choose the perfect genre matching your script's sentiment!
     if not bg_music_path or bg_music_path == "auto" or not os.path.exists(bg_music_path):
         text_lower = spoken_text.lower()
-        if any(w in text_lower for w in ["money", "wealth", "strategy", "truth", "brain", "neuroscience", "secret"]):
+        # v2: LOFI is the default bed (voice-first). Dramatic only for explicit urgency content —
+        # busy electronic mids fight the voice and are a top skip trigger.
+        if any(w in text_lower for w in ["scam", "exposed", "warning", "danger", "urgent", "emergency", "breaking"]):
             track_tag = "dramatic"
         elif any(w in text_lower for w in ["romance", "intimacy", "love", "passion", "feel", "partner", "kiss"]):
             track_tag = "ambient"
         else:
-            track_tag = "lofi" # Default focusing rhythm
+            track_tag = "lofi" # calm lofi bed — the elite faceless standard
             
         download_free_soundtrack(track_tag)
         bg_music_path = os.path.join(DEFAULT_DIR, f"music_{track_tag}.mp3")
@@ -1191,28 +2306,66 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             
     voice_audio = AudioFileClip(audio_path)
     duration = voice_audio.duration
-    
-    # Upgrade: Adaptive Kinetic Pacing (Variable Attention Splitting)
-    # Instead of static, predictable cuts, we dynamically vary cut lengths between 0.8s and 1.7s
-    # to prevent the brain from habituating to a static visual rhythm!
-    current_time = 0.0
-    scene_boundaries = []
-    idx_pac = 0
-    while current_time < duration:
-        if current_time < 4.0:
-            scene_dur = random.uniform(0.8, 1.1)  # High-energy ultra-fast hook cuts!
-        else:
-            random.seed(idx_pac)
-            scene_dur = random.uniform(1.1, 1.7)  # Alternating cognitive-pacing cuts!
-            
-        if current_time + scene_dur >= duration - 0.5:
-            scene_dur = duration - current_time
-            
-        if scene_dur > 0.05:
-            scene_boundaries.append((current_time, current_time + scene_dur))
-        current_time += scene_dur
-        idx_pac += 1
-        
+
+    # ====================================================================
+    # NEW: ELITE STYLE SYSTEM — background style, accent color, clip mode
+    # ====================================================================
+    style_bg = str(kwargs.get("style_bg", "grid")).lower()
+    style_accent = str(kwargs.get("style_accent", "yellow")).lower()
+    clip_mode = str(kwargs.get("clip_mode", "blend")).lower()
+    accent_rgb = (255, 215, 0)
+    if se is not None:
+        accent_rgb = se.ACCENTS.get(style_accent, (255, 215, 0))
+
+    # L1: ALWAYS-ON dark style background (never pure black — luminance floor)
+    style_bg_clip = None
+    try:
+        if se is not None:
+            if progress_cb: progress_cb(0.28, f"Building '{style_bg}' style background with {style_accent} accent glow...")
+            style_bg_clip = se.make_style_background_clip(duration, style=style_bg, accent=style_accent)
+    except Exception as e:
+        print(f"[StyleEngine] Background generation failed: {e}")
+
+    # ====================================================================
+    # PRO EDITOR BRAIN — v3 pipeline (research: Cutting Rhythms, pro post
+    # workflows, -14 LUFS mixing standard)
+    # PASS 0: paper cut (beat map) · Elite layer (reveal = climax)
+    # PASS 2: pro rhythm (tension-driven cuts ON spoken words)
+    # ====================================================================
+    vtt_subs = parse_vtt(vtt_path)
+
+    # Elite text layer — its reveal moment is the CLIMAX of the whole video
+    elite_clips = []
+    elite_sfx = []
+    if se is not None:
+        try:
+            elite_clips, elite_sfx = se.build_elite_text_layer(
+                script_text, vtt_subs, duration, accent=style_accent, sfx_dir=AUDIO_DIR)
+        except Exception as e:
+            print(f"[StyleEngine] Elite text layer failed: {e}")
+    arc_peak_t = next((t for k, t, v in elite_sfx if k == "__ding__"), None)
+
+    # PASS 2 — RHYTHM: tension-based shot lengths, cut-on-word, 2.5s hard
+    # cap, 2-fast-then-slow breathing (replaces random pacing)
+    if progress_cb: progress_cb(0.29, "PRO EDITOR: paper cut (beat map) + pro rhythm (tension cuts on words)...")
+    scene_boundaries = None
+    if pe is not None:
+        try:
+            beat_map = pe.build_beat_map(duration, climax_t=arc_peak_t)
+            scene_boundaries = pe.build_scene_rhythm(beat_map, vtt_subs, duration)
+        except Exception as e:
+            print(f"[ProEditor] rhythm failed ({e}); falling back to fixed pacing")
+    if scene_boundaries is None or not scene_boundaries:
+        scene_boundaries = []
+        ct = 0.0
+        while ct < duration:
+            sd = 1.0 if ct < 3.0 else 1.5
+            if ct + sd >= duration - 0.3:
+                sd = duration - ct
+            if sd > 0.05:
+                scene_boundaries.append((ct, ct + sd))
+            ct += sd
+
     num_cuts = len(scene_boundaries)
     
     # Upgrade: Parse and Schedule Psychological tags dynamically from script draft lines!
@@ -1244,34 +2397,41 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 points_text = save_match.group(1).strip()
                 save_trigger_overlays.append((start_t, points_text))
                 
-    if progress_cb: progress_cb(0.30, "Combining vocal tracks, ducking volume, and mixing soundtracks with dynamic Sound Drops...")
-    mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume, drop_times=drop_times)
+    # ====================================================================
+    # (Elite text layer + arc_peak_t already built in the PRO EDITOR block above)
+    # ====================================================================
+
+    if progress_cb: progress_cb(0.30, "PRO PASS 4: voice chain + music arc (intro swell, voice-duck breathing, climax peak)...")
+    mixed_audio, voice_audio = load_and_mix_audio(audio_path, bg_music_path, bg_music_volume, drop_times=drop_times, arc_peak_t=arc_peak_t, vtt_subs=vtt_subs)
     
     progress_cb_step_weight = 0.40 / num_cuts
     visual_clips = []
     transition_audio_clips = []
     whoosh_path = generate_synthetic_whoosh_sound()
     
-    # Read API key permanently
+    # Read API keys permanently (B8: app-folder first, CWD fallback)
+    def _read_key_file(name):
+        for d in (BASE_DIR, os.getcwd()):
+            p = os.path.join(d, name)
+            if os.path.exists(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        return f.read().strip()
+                except Exception as e:
+                    print(f"[Keys] Could not read {name}: {e}")
+        return ""
+
     pexels_key = kwargs.get("pexels_api_key", None)
     if not pexels_key or not pexels_key.strip():
-        if os.path.exists("pexels_key.txt"):
-            try:
-                with open("pexels_key.txt", "r", encoding="utf-8") as f:
-                    pexels_key = f.read().strip()
-            except:
-                pass
-                
-    pixabay_key = None
-    if os.path.exists("pixabay_key.txt"):
-        try:
-            with open("pixabay_key.txt", "r", encoding="utf-8") as f:
-                pixabay_key = f.read().strip()
-        except:
-            pass
+        pexels_key = _read_key_file("pexels_key.txt")
+
+    pixabay_key = _read_key_file("pixabay_key.txt") or None
             
     custom_files = uploaded_file_paths if uploaded_file_paths else []
     b_roll_source = kwargs.get("b_roll_source", "pexels").lower()
+
+    # PIECE 4 — CHARACTER BIBLE: the channel's locked visual identity
+    channel_bible = kwargs.get("character_bible", None) or load_character_bible()
     
     # Read custom storyboard scenarios list if passed!
     custom_scenarios = kwargs.get("custom_scenarios", [])
@@ -1299,7 +2459,114 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         meme_sfx_path = download_free_meme_sfx(meme_sfx_name)
     
     hf_token = kwargs.get("hf_token", None)
-    
+
+    # ====================================================================
+    # NEW: B-ROLL LOADER WITH STYLE-SYSTEM CLIP MODES + ZOOM PUNCH
+    # blend = darkened semi-transparent over the style background
+    # inset = rounded window over the style background
+    # full  = classic full-frame (premium grade applied)
+    # none  = text-first elite mode (no clips at all)
+    # ====================================================================
+    def add_broll(clip_path, start_t, clip_dur, idx):
+        try:
+            raw_v = VideoFileClip(clip_path)
+            sub_start = 0.0
+            if raw_v.duration > clip_dur + 1.0:
+                np.random.seed(idx)
+                sub_start = np.random.uniform(0.0, raw_v.duration - clip_dur)
+            # --- MEMORY-SAFE SEGMENT EXTRACTION ---
+            # Extract the exact 1-2s segment to a tiny temp file, then close the big
+            # source reader immediately. Prevents the ~30 open ffmpeg readers from
+            # exhausting RAM on low-memory hosts (Streamlit Cloud free tier).
+            seg_path = os.path.join(AUDIO_DIR, f"seg_{os.getpid()}_{int(time.time() * 1000)}_{idx}.mp4")
+            seg_ok = False
+            try:
+                import imageio_ffmpeg
+                _ff = imageio_ffmpeg.get_ffmpeg_exe()
+                subprocess.run(
+                    [_ff, "-y", "-loglevel", "error",
+                     "-ss", f"{sub_start:.2f}", "-t", f"{clip_dur:.2f}",
+                     "-i", clip_path, "-an",
+                     "-c:v", "libx264", "-preset", "ultrafast",
+                     "-pix_fmt", "yuv420p", "-r", "24", seg_path],
+                    check=True, timeout=120,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                seg_ok = os.path.exists(seg_path) and os.path.getsize(seg_path) > 1000
+            except Exception as seg_err:
+                print(f"[Broll] Segment extraction failed ({seg_err}); using in-memory subclip")
+                _force_delete(seg_path)   # B5: don't leave a partial file behind
+            if seg_ok:
+                raw_v.close()
+                sub_v = VideoFileClip(seg_path)
+                _seg_files.append(seg_path)    # B5: delete after final render
+                _seg_clips.append(sub_v)       # B5: close after final render
+            else:
+                sub_v = raw_v.subclipped(sub_start, sub_start + clip_dur)
+            if clip_mode == "none":
+                return True  # text-first mode: background + text only
+            dark = (clip_mode == "blend")
+            # PRO PASS 5 — primary correction: sample this clip's exposure and
+            # match it to the channel's dark-premium target level
+            exp_gain = 1.0
+            if pe is not None:
+                try:
+                    fr = [sub_v.get_frame(0.05), sub_v.get_frame(clip_dur / 2.0), sub_v.get_frame(max(0.05, clip_dur - 0.1))]
+                    exp_gain = pe.exposure_gain_for_frames(fr)
+                except Exception:
+                    exp_gain = 1.0
+            # v2: brighter blend (0.82) + lighter dark grade — clips must stay clearly visible
+            scaled_sub = make_vertical_clip(sub_v, dark_blend=dark, exposure_gain=exp_gain)
+            # Zoom punch: subtle 6% push-in over the cut (motion = retention)
+            try:
+                if clip_dur > 0.5:
+                    d = clip_dur
+                    scaled_sub = scaled_sub.resized(lambda t, d=d: 1.0 + 0.06 * (min(t, d) / d))
+            except Exception:
+                pass
+            if clip_mode == "blend" and se is not None:
+                try:
+                    scaled_sub = se.set_opacity(scaled_sub, 0.82)
+                except Exception:
+                    pass
+            elif clip_mode == "inset":
+                try:
+                    win_w, win_h = 620, 1102
+                    small = scaled_sub.resized(width=win_w, height=win_h)
+                    mask_img = Image.new("L", (win_w, win_h), 0)
+                    md = ImageDraw.Draw(mask_img)
+                    md.rounded_rectangle([(0, 0), (win_w - 1, win_h - 1)], radius=28, fill=255)
+                    if se is not None:
+                        small = se.set_mask(small, ImageClip(np.array(mask_img), ismask=True))
+                    else:
+                        small = small.with_mask(ImageClip(np.array(mask_img), ismask=True))
+                    small = small.with_position(((720 - win_w) // 2, 90))
+                    scaled_sub = small
+                except Exception as ie:
+                    print(f"[StyleEngine] Inset window failed: {ie}")
+            visual_clips.append(scaled_sub.with_start(start_t))
+            return True
+        except Exception as e:
+            print(f"Failed loading B-roll clip: {e}")
+            return False
+
+    used_search_words = set()   # each abstract word searched at most once per video
+    used_clip_files = set()     # never reuse the same source clip twice
+    prev_clip_file = None       # generic word spoken → carry the previous visual
+
+    # B5: clear STALE segment temp files from a previously crashed/killed render
+    # (anything older than 10 minutes is safe to remove; live segments are fresh)
+    try:
+        for _n in os.listdir(AUDIO_DIR):
+            if _n.startswith("seg_") and _n.endswith(".mp4"):
+                _p = os.path.join(AUDIO_DIR, _n)
+                try:
+                    if time.time() - os.path.getmtime(_p) > 600:
+                        _force_delete(_p)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     for idx in range(num_cuts):
         start_t, end_t = scene_boundaries[idx]
         clip_dur = end_t - start_t
@@ -1307,7 +2574,14 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             continue
             
         clip_added = False
-        
+        search_word = None
+        # PRO FIX: VTT-SYNCED selection — the visual must match the word being
+        # SPOKEN right now (not a rotating list from the whole script)
+        sync_word = spoken_word_in_window(start_t, end_t, vtt_subs, used_search_words)
+        if sync_word:
+            used_search_words.add(sync_word)
+            search_word = sync_word
+
         # Scenario A: Use uploaded file first!
         if idx < len(custom_files):
             file_path = custom_files[idx]
@@ -1318,107 +2592,138 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                     visual_clips.append(v_clip)
                     clip_added = True
                 elif file_path.lower().endswith(('.mp4', '.mov')):
-                    try:
-                        raw_v = VideoFileClip(file_path)
-                        sub_start = 0.0
-                        if raw_v.duration > clip_dur + 1.0:
-                            np.random.seed(idx)
-                            sub_start = np.random.uniform(0.0, raw_v.duration - clip_dur)
-                        sub_v = raw_v.subclipped(sub_start, sub_start + clip_dur).with_start(start_t)
-                        scaled_sub = make_vertical_clip(sub_v)
-                        visual_clips.append(scaled_sub)
+                    if add_broll(file_path, start_t, clip_dur, idx):
                         clip_added = True
-                    except Exception as e:
-                        print(f"Failed loading uploaded clip: {e}")
                         
-        # --- NEW DEFINTIONAL LOGIC: SCENARIO B - GENERATE TRUE AI VIDEO FROM SCRATCH IN FIRST PRIORITY! ---
-        if not clip_added and b_roll_source == "huggingface" and hf_token and hf_token.strip():
-            # Use user's custom scenario prompt if provided, otherwise fallback to extracted keywords!
+        # --- SCENARIO B - GENERATE TRUE AI VIDEO FROM SCRATCH ---
+        # PIECE 5 (AUTO MODE): b_roll_source "auto" = Pollinations PRIMARY (keyless,
+        # never depletes), HF secondary. "huggingface" = HF primary, Pollinations backup.
+        # PIECE 4 (CHARACTER BIBLE): bible + seed_offset keep the same look every clip.
+        is_ai_mode = b_roll_source in ("huggingface", "auto")
+        ai_allowed = is_ai_mode and (b_roll_source == "auto" or (hf_token and hf_token.strip()))
+        if not clip_added and ai_allowed:
             if idx < len(custom_scenarios) and custom_scenarios[idx].strip():
                 search_word = custom_scenarios[idx].strip()
-            else:
-                search_word = "abstract"
-                if len(sentence_words) > 0:
-                    search_word = sentence_words[idx % len(sentence_words)]
-                    
-            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Generating completely unique vertical MP4 clip for '{search_word.upper()}' using Stable Video Diffusion...")
-            downloaded_file = generate_true_ai_video_clip(search_word, hf_token)
-            if downloaded_file and os.path.exists(downloaded_file):
-                try:
-                    raw_v = VideoFileClip(downloaded_file)
-                    sub_start = 0.0
-                    if raw_v.duration > clip_dur + 1.0:
-                        np.random.seed(idx)
-                        sub_start = np.random.uniform(0.0, raw_v.duration - clip_dur)
-                    sub_v = raw_v.subclipped(sub_start, sub_start + clip_dur).with_start(start_t)
-                    scaled_sub = make_vertical_clip(sub_v)
-                    visual_clips.append(scaled_sub)
+            elif not search_word and len(sentence_words) > 0:
+                search_word = sentence_words[idx % len(sentence_words)]
+            if search_word:
+                if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Generating clip for '{search_word.upper()}'...")
+                downloaded_file = generate_true_ai_video_clip(
+                    search_word, hf_token,
+                    bible=channel_bible, seed_offset=idx,
+                    prefer_pollinations=(b_roll_source == "auto"))
+                if downloaded_file and os.path.exists(downloaded_file) and downloaded_file not in used_clip_files and add_broll(downloaded_file, start_t, clip_dur, idx):
                     clip_added = True
-                except Exception as e:
-                    print(f"Failed loading generative clip: {e}")
-                        
-        # Scenario C: Fetch stock video from Pexels or Pixabay (as primary source, or as fallback if HuggingFace failed)!
+                    used_clip_files.add(downloaded_file)
+                    prev_clip_file = downloaded_file
+
+        # Scenario C: Fetch stock video — VTT-SYNCED to the spoken word!
         if not clip_added:
             target_source = b_roll_source
-            if target_source == "huggingface":
+            if target_source in ("huggingface", "auto"):
                 target_source = "pexels" if pexels_key and pexels_key.strip() else "pixabay"
-                
+            # F2: pexels hourly budget near/exhausted → auto-switch to pixabay
+            if target_source == "pexels" and not _pexels_gate_open():
+                if pixabay_key and pixabay_key.strip():
+                    target_source = "pixabay"
+
             active_key = pexels_key if target_source == "pexels" else pixabay_key
-            
+
             if active_key and active_key.strip():
                 if idx < len(custom_scenarios) and custom_scenarios[idx].strip():
                     search_word = custom_scenarios[idx].strip()
-                else:
-                    search_word = "abstract"
-                    if len(sentence_words) > 0:
-                        search_word = sentence_words[idx % len(sentence_words)]
-                
-                if b_roll_source == "huggingface":
-                    if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"⚠️ HuggingFace failed. Falling back to {target_source.upper()} stock clip for '{search_word.upper()}'...")
-                else:
-                    if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"AI Downloading vertical HD stock clip from {target_source.upper()} for '{search_word.upper()}'...")
-                    
-                downloaded_file = download_pexels_b_roll_with_fallback(search_word, active_key, source=target_source, color_tone=color_tone)
-                if downloaded_file and os.path.exists(downloaded_file):
-                    try:
-                        raw_v = VideoFileClip(downloaded_file)
-                        sub_start = 0.0
-                        if raw_v.duration > clip_dur + 1.0:
-                            np.random.seed(idx)
-                            sub_start = np.random.uniform(0.0, raw_v.duration - clip_dur)
-                        sub_v = raw_v.subclipped(sub_start, sub_start + clip_dur).with_start(start_t)
-                        scaled_sub = make_vertical_clip(sub_v)
-                        visual_clips.append(scaled_sub)
+                elif not search_word and prev_clip_file:
+                    # Generic/abstract word spoken (she/her/woman/real...) →
+                    # HOLD the previous visual instead of a NEW random clip
+                    if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, "Holding previous visual (word not illustratable)...")
+
+                if search_word:
+                    if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Downloading clip for SPOKEN word '{search_word.upper()}'...")
+                    downloaded_file = download_pexels_b_roll_with_fallback(search_word, active_key, source=target_source, color_tone=color_tone)
+                    if downloaded_file and os.path.exists(downloaded_file) and downloaded_file in used_clip_files:
+                        # same clip already used → dedupe: reuse previous instead
+                        downloaded_file = None
+                    if downloaded_file and os.path.exists(downloaded_file) and add_broll(downloaded_file, start_t, clip_dur, idx):
                         clip_added = True
-                    except Exception as e:
-                        print(f"Failed loading downloaded stock clip: {e}")
-                    
-        # Scenario D: Fallback to Beautiful Editorial Solid-Color Graphic Cards!
-        if not clip_added:
-            if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, "Generating custom-color editorial backup graphic card...")
-            p_clip = make_solid_color_card_clip(clip_dur, color_tuple=vibe_color_rgb).with_start(start_t)
-            visual_clips.append(p_clip)
+                        used_clip_files.add(downloaded_file)
+                        prev_clip_file = downloaded_file
+                elif prev_clip_file and add_broll(prev_clip_file, start_t, clip_dur, idx):
+                    clip_added = True
+
+        # Scenario D: TEXT-FIRST fallback (pro Tool 3) — the word ITSELF becomes
+        # the visual: style background + huge accent word. Only when real footage
+        # is unavailable; no more random "aesthetic" clips for abstract words.
+        if not clip_added and clip_mode != "none":
+            kw = (search_word or "").split()[0] if search_word else ""
+            kw = kw if 2 <= len(kw) <= 16 else ""
+            if kw and se is not None:
+                try:
+                    if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Text-first beat for '{kw.upper()}'...")
+                    kw_clip = se.make_keyword_clip(kw, clip_dur, accent=style_accent, style=style_bg)
+                    visual_clips.append(kw_clip.with_start(start_t))
+                    clip_added = True
+                except Exception as e:
+                    print(f"[StyleEngine] keyword clip failed: {e}")
+            if not clip_added:
+                if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, "Generating custom-color editorial backup graphic card...")
+                p_clip = make_solid_color_card_clip(clip_dur, color_tuple=vibe_color_rgb).with_start(start_t)
+                visual_clips.append(p_clip)
             
-        if idx > 0:
+        # PRO PASS 6 — NO per-cut transitions. The pro edit is INVISIBLE:
+        # hard cuts carry 90%+ of the edit; flashes are reserved for the
+        # 3 structural moments (added after the loop).
+                
+    # PRO PASS 6 — transition flash reserved for the 3 STRUCTURAL moments only:
+    # hook→content, the reveal (climax), and the ending. Never on every cut.
+    for _fl_t in (scene_boundaries[0][1] if scene_boundaries else 3.0,
+                  arc_peak_t,
+                  duration - 2.0):
+        if _fl_t and 0.5 < _fl_t < duration - 0.5:
             try:
-                # Upgraded: J-Cut transition whoosh (starts 0.25s before visual cut!)
-                j_cut_start = max(0.0, start_t - 0.25)
-                whoosh_clip = AudioFileClip(whoosh_path).with_start(j_cut_start).with_volume_scaled(db_whoosh_volume)
-                transition_audio_clips.append(whoosh_clip)
-                
-                # Upgraded: Cinematic Light-Leak Flash transition visual overlay!
-                flash_clip = make_light_leak_flash(start_t, duration=0.25)
-                visual_clips.append(flash_clip)
-            except Exception as e:
-                print(f"Failed rendering J-cut transition layers: {e}")
-                
+                visual_clips.append(make_light_leak_flash(_fl_t, duration=0.25))
+            except Exception:
+                pass
+
     if meme_sfx_path and os.path.exists(meme_sfx_path):
         try:
-            sfx_clip = AudioFileClip(meme_sfx_path).with_start(scene_boundaries[0][1] if len(scene_boundaries) > 0 else 2.0).with_volume_scaled(0.18)
+            sfx_clip = make_safe_sfx_clip(meme_sfx_path, scene_boundaries[0][1] if len(scene_boundaries) > 0 else 2.0, duration, 0.18)
             transition_audio_clips.append(sfx_clip)
         except Exception as e:
             print(f"Failed mixing meme SFX: {e}")
-            
+
+    # ====================================================================
+    # ====================================================================
+    # NEW: ELITE TEXT LAYER — built earlier (before the audio mix) so its
+    # reveal moment can drive the energy arc. SFX budget: max 5 per video.
+    # ====================================================================
+    _sfx_cache = {}
+    def _sfx_path(key):
+        if key not in _sfx_cache:
+            if key == "__hit__":
+                _sfx_cache[key] = se.generate_sfx_hit(AUDIO_DIR)
+            elif key == "__pop__":
+                _sfx_cache[key] = generate_synthetic_pop_sound()
+            elif key == "__whoosh__":
+                _sfx_cache[key] = whoosh_path
+            elif key == "__riser__":
+                _sfx_cache[key] = se.generate_sfx_riser(AUDIO_DIR)
+            elif key == "__impact__":
+                _sfx_cache[key] = se.generate_sfx_impact(AUDIO_DIR)
+            elif key == "__ding__":
+                _sfx_cache[key] = se.generate_sfx_ding(AUDIO_DIR)
+            else:
+                _sfx_cache[key] = None
+        return _sfx_cache[key]
+
+    for sfx_key, sfx_t, sfx_vol in elite_sfx:
+        try:
+            p = _sfx_path(sfx_key)
+            if p:
+                c = make_safe_sfx_clip(p, max(0.0, min(sfx_t, duration - 0.05)), duration, sfx_vol * sfx_level)
+                transition_audio_clips.append(c)
+        except Exception as e:
+            print(f"[StyleEngine] SFX {sfx_key} failed: {e}")
+
     # Upgrade: Dynamic Micro-Meme Overlay Sticker Injector!
     for start_t, meme_type in meme_overlays:
         try:
@@ -1429,15 +2734,17 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 meme_clip = ImageClip(np.array(meme_badge)).with_start(start_t).with_duration(meme_dur).with_position(("center", 780))
                 visual_clips.append(meme_clip)
                 try:
-                    pop_sfx = AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume * 1.5)
+                    pop_sfx = make_safe_sfx_clip(whoosh_path, start_t, duration, db_whoosh_volume * 1.5)
                     transition_audio_clips.append(pop_sfx)
-                except:
+                except Exception:
                     pass
         except Exception as e:
             print(f"Failed overlaying micro-meme sticker: {e}")
             
     # Upgrade: Dynamic High-Density Save Trigger Infographics Card Injector!
-    for start_t, points_text in save_trigger_overlays:
+    # (skipped when the new elite curiosity card already shows this list)
+    _elite_has_card = (se is not None) and bool(se.parse_beats(script_text)[1])
+    for start_t, points_text in ([] if _elite_has_card else save_trigger_overlays):
         try:
             if start_t < duration:
                 if progress_cb: progress_cb(0.71, "Integrating dynamic high-density Save-Trigger infographic overlay...")
@@ -1445,13 +2752,24 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 save_clip = save_card.with_start(start_t).with_position(("center", "center"))
                 visual_clips.append(save_clip)
                 try:
-                    chime_sfx = AudioFileClip(whoosh_path).with_start(start_t).with_volume_scaled(db_whoosh_volume * 1.8)
+                    chime_sfx = make_safe_sfx_clip(whoosh_path, start_t, duration, db_whoosh_volume * 1.8)
                     transition_audio_clips.append(chime_sfx)
-                except:
+                except Exception:
                     pass
         except Exception as e:
             print(f"Failed overlaying Save-Trigger card: {e}")
             
+    # PRO FIX: in blend mode the channel background (grid + accent glow) is
+    # ALSO painted lightly ON TOP of the B-roll, so the brand background is
+    # ALWAYS visible — the frame stays unified, no more "no background" feel
+    if clip_mode == "blend" and se is not None:
+        try:
+            grid_overlay = se.make_style_background_clip(duration, style=style_bg, accent=style_accent)
+            grid_overlay = se.set_opacity(grid_overlay, 0.28)
+            visual_clips.append(grid_overlay)
+        except Exception as e:
+            print(f"[StyleEngine] grid overlay failed: {e}")
+
     # Upgrade: Cinematic Vignette Edge-Shading Overlay (Eye Funnel Mask)
     try:
         vignette_mask = make_vignette_overlay(duration)
@@ -1459,16 +2777,18 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     except Exception as e:
         print(f"Failed applying cinematic vignette mask: {e}")
             
-    raw_bg_clip = CompositeVideoClip(visual_clips, size=(720, 1280)).with_duration(duration)
+    # L1 style background is ALWAYS the base layer — the frame can never die to black
+    base_layers = [style_bg_clip] if style_bg_clip is not None else []
+    raw_bg_clip = CompositeVideoClip(base_layers + visual_clips, size=(720, 1280)).with_duration(duration)
     
     # Layer film scratch overlay
     if progress_cb: progress_cb(0.72, "Applying 24fps luxury film grain and retro dust scratches overlay...")
     film_overlay = make_cinematic_overlay(duration)
     bg_clip = CompositeVideoClip([raw_bg_clip, film_overlay]).with_duration(duration)
     
-    if progress_cb: progress_cb(0.80, "Slicing subtitle timings, emojifying captions, and mapping Neon highlights...")
+    if progress_cb: progress_cb(0.80, "Slicing word-by-word caption timings and mapping power-word highlights...")
     caption_style = kwargs.get("caption_style", db_caption_style)
-    text_clips, sfx_clips = build_subtitle_and_sfx_clips(parse_vtt(vtt_path), color=font_color, caption_style=caption_style, font_size=db_font_size)
+    text_clips, sfx_clips = build_subtitle_and_sfx_clips(parse_vtt(vtt_path), color=font_color, caption_style=caption_style, font_size=db_font_size, total_duration=duration, accent_rgb=accent_rgb, sfx_level=sfx_level)
     
     # Mix all sound design elements (subtitles pop clicks + transition whooshes + meme triggers) into the main audio track!
     all_sfx = sfx_clips + transition_audio_clips
@@ -1478,14 +2798,21 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     bg_clip = bg_clip.with_audio(mixed_audio)
     
     extra_clips = []
-    if kwargs.get("show_progress_bar", True):
-        prog_clip = make_progress_bar_clip(duration)
+    # Progress bar is OFF by default (YouTube UI covers the bottom edge; it read as a bug)
+    if kwargs.get("show_progress_bar", False):
+        prog_clip = make_progress_bar_clip(duration, bar_color=accent_rgb)
         extra_clips.append(prog_clip)
+
+    # NEW: Elite text layer — hook / beats / cards / arrows (content-driven retention)
+    extra_clips.extend(elite_clips)
         
-    # Upgrade: Add highly viral psychology pop-up sticker overlays to trigger unshakeable retention!
-    psych_stickers = build_retention_overlays(duration)
-    extra_clips.extend(psych_stickers)
-        
+    # PRO PASS 7 — QC: luminance floor sweep (no dead-black frames allowed)
+    if pe is not None:
+        try:
+            pe.qc_luminance_sweep(bg_clip, duration, step=1.0)
+        except Exception:
+            pass
+
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
     # --- COMBINED ROBUST WINDOWS COLORSPACE & CODEC FIXED FORMAT + SPEED PRESET SPEEDUP ---
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
@@ -1499,16 +2826,46 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     )
     
     if progress_cb: progress_cb(0.98, "Releasing local system file locks and saving database state...")
-    try: 
+    try:
         mixed_audio.close()
-        voice_audio.close() 
+        voice_audio.close()
         bg_clip.close()
         for tc in text_clips: tc.close()
         for ec in extra_clips: ec.close()
         for sc in sfx_clips: sc.close()
         for wc in transition_audio_clips: wc.close()
-    except: 
+    except Exception:
+        pass
+
+    # B5/B9: release the per-cut segment readers, THEN delete the temp files
+    # (deleting before close = the classic Windows "file in use" lock bug)
+    for _sc in _seg_clips:
+        try:
+            _sc.close()
+        except Exception:
+            pass
+    for _sf in _seg_files:
+        _force_delete(_sf)
+    # O2: free the frame buffers the render just held (batch mode = 5 in a row)
+    gc.collect()
+    # O1: keep the disk bounded (newest 12 videos, newest 400 b-roll clips)
+    try:
+        prune_output_dirs()
+    except Exception:
         pass
         
+    # PIECE 11 — auto thumbnail (same visual rules every upload)
+    thumb_path = None
+    try:
+        hook_line = ""
+        for _l in str(script_text).split("\n"):
+            _l2 = _l.strip()
+            if _l2 and not (_l2.startswith("[") and _l2.endswith("]")):
+                hook_line = re.sub(r"\[.*?\]", "", _l2).strip()
+                break
+        thumb_path = generate_thumbnail(output_video_path, hook_line, accent_rgb=accent_rgb)
+    except Exception as e:
+        print(f"[Thumbnail] skipped: {e}")
+
     if progress_cb: progress_cb(1.00, "Render complete!")
-    return output_video_path, audio_path, vtt_path
+    return output_video_path, audio_path, vtt_path, thumb_path

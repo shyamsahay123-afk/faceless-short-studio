@@ -1,0 +1,15 @@
+# Faceless AI Short Studio — bounded version pins (fix B6).
+# Unpinned installs were silently drifting between major versions and that
+# was the root cause of the "it worked yesterday" class of bugs:
+#   - edge-tts 7.2 changed its default subtitle boundary (killed word-sync captions)
+#   - moviepy 2.x changed its whole clip API (1.x breaks it, 3.x unknown)
+# Ranges are pinned tight: they accept what you already have, block future majors.
+streamlit>=1.37,<2.0
+moviepy>=2.0,<3.0
+edge-tts>=6.1,<8.0
+pillow>=10.0,<13.0
+numpy>=1.26,<3.0
+requests>=2.31,<3.0
+huggingface_hub>=0.24
+gtts>=2.5          # TTS last-resort engine (was missing before = silent death)
+imageio-ffmpeg>=0.5   # bundled ffmpeg binary the renderer actually uses

@@ -1,5 +1,6 @@
 import os
 import re
+import gc
 import random
 import traceback
 import xml.etree.ElementTree as ET
@@ -77,38 +78,53 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Ensure Directories Exist ---
-os.makedirs("uploaded_assets", exist_ok=True)
+# --- Ensure Directories Exist (B8: anchored to the app folder, not the CWD) ---
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+os.makedirs(os.path.join(APP_DIR, "uploaded_assets"), exist_ok=True)
 
 def save_uploaded_file(uploaded_file, target_dir="uploaded_assets"):
     if not uploaded_file: return None
+    target_dir = os.path.join(APP_DIR, target_dir)
+    os.makedirs(target_dir, exist_ok=True)
     file_path = os.path.join(target_dir, uploaded_file.name)
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
     return file_path
 
-# --- LOCAL FILE API KEY AUTO-SAVERS ---
+# --- LOCAL FILE API KEY AUTO-SAVERS (B8: always in the app folder) ---
 def load_key_from_file(filename):
-    if os.path.exists(filename):
+    path = os.path.join(APP_DIR, filename)
+    if os.path.exists(path):
         try:
-            with open(filename, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 return f.read().strip()
-        except:
-            pass
+        except Exception as e:
+            print(f"[Keys] Could not read {filename}: {e}")
     return ""
 
 def save_key_to_file(filename, key):
     try:
-        with open(filename, "w", encoding="utf-8") as f:
+        with open(os.path.join(APP_DIR, filename), "w", encoding="utf-8") as f:
             f.write(str(key).strip())
-    except:
-        pass
+    except Exception as e:
+        print(f"[Keys] Could not save {filename}: {e}")
 
 # --- CLEAN API KEY UTILITY ---
 def clean_api_key(key):
     if not key:
         return ""
     return str(key).split(" - ")[0].split(" ")[0].strip()
+
+# --- SECRET RESOLVER: Streamlit Cloud secrets first, local .txt files second ---
+def get_secret_key(name, filename):
+    try:
+        if name in st.secrets:
+            v = str(st.secrets[name]).strip()
+            if v:
+                return clean_api_key(v)
+    except Exception:
+        pass
+    return clean_api_key(load_key_from_file(filename))
 
 # --- FAST CACHED API CONNECTION STATUS TESTERS ---
 @st.cache_data(ttl=60)
@@ -120,7 +136,7 @@ def test_pexels_key_connection(api_key):
         if r.status_code == 200:
             return "valid"
         return "invalid"
-    except:
+    except Exception:
         return "error"
 
 @st.cache_data(ttl=60)
@@ -133,7 +149,7 @@ def test_pixabay_key_connection(api_key):
         if r.status_code == 200:
             return "valid"
         return "invalid"
-    except:
+    except Exception:
         return "error"
 
 @st.cache_data(ttl=60)
@@ -146,7 +162,7 @@ def test_elevenlabs_key_connection(api_key):
         if r.status_code in (200, 402):
             return "valid"
         return "invalid"
-    except:
+    except Exception:
         return "error"
 
 @st.cache_data(ttl=60)
@@ -165,7 +181,7 @@ def test_huggingface_key_connection(api_key):
         if r2.status_code == 200:
             return "valid"
         return "invalid"
-    except:
+    except Exception:
         return "error"
 
 def display_status_badge(status):
@@ -195,7 +211,7 @@ def fetch_trending_shorts_concepts():
             items = root.findall('.//item/title')
             for idx, item in enumerate(items[:3]):
                 if item.text: base_trends.insert(idx, f"Why high-performers study the '{item.text}' focus shift")
-    except:
+    except Exception:
         pass
     return list(set(base_trends))[:5]
 
@@ -209,9 +225,9 @@ def auto_generate_script_local(topic, style_choice):
         hook_category = "Romance & Intimacy"
         trigger_desc = "Connect directly with core emotional desires, chemistry secrets, and deep intimacy loops."
         hooks = [
-            "The bizarre psychology why people fall head over heels for [Topic]...",
-            "If you want to master deep passionate chemistry with your partner, stop doing this Mistake.",
-            "Studies reveal the raw truth why unshakeable physical intimacy has nothing to do with looks."
+            "9 out of 10 people understand this backwards. Here is the raw truth about [Topic] that nobody says out loud.",
+            "There is a hidden rule of [Topic] the top 1% never break. It takes 30 minutes a night.",
+            "What is the silent signal your brain sends when real chemistry starts? Psychologists have a name for it: [Topic].",
         ]
         value_delivery = """[VALUE DELIVERY]
 Here is the raw relationship shift:
@@ -225,9 +241,9 @@ Lock in undivided, focused attention for 30 minutes every single night.
         hook_category = "Curiosity Gap"
         trigger_desc = "Create an open loop in the first 2 seconds that makes the brain demand closure."
         hooks = [
-            "99% of people get this entirely wrong. Here is the exact truth about [Topic].",
-            "What is the bizarre secret to unshakeable consistency? The answer will shock you.",
-            "Why do intelligent people struggle to stay consistent? It has nothing to do with willpower."
+            "99% of people get this entirely wrong. Here is the exact truth nobody talks about: [Topic].",
+            "There is a hidden pattern behind [Topic] that intelligent people use before 6 AM. It takes only 20 minutes.",
+            "What is the most dangerous habit your brain runs on? Scientists have a name for it. It starts with [Topic].",
         ]
         value_delivery = """[VALUE DELIVERY]
 Here is the exact neuroscience breakdown:
@@ -241,9 +257,9 @@ To stop overthinking, establish a strict 20-minute daily execution sprint.
         hook_category = "Identity Signaling"
         trigger_desc = "Make the viewer feel they belong to a higher-status group (smart, disciplined, successful)."
         hooks = [
-            "Only the top 1% of highly disciplined minds actually do this.",
-            "If you want to operate like an elite performer, stop acting like everybody else.",
-            "Why do intelligent minds fail to execute? Because they rely on motivation, not discipline."
+            "Only 1 in 100 people do this every single day. Here is the exact system: [Topic].",
+            "Intelligent people don't rely on motivation. They use this hidden 20-minute rule instead.",
+            "What separates the top 1% from everyone else? It's not talent. It's this one [Topic] system.",
         ]
         value_delivery = """[VALUE DELIVERY]
 Here is the elite performance strategy:
@@ -257,9 +273,9 @@ Lock yourself in a room with zero devices and write for 90 minutes.
         hook_category = "Loss Aversion"
         trigger_desc = "Highlight what the viewer will lose if they don’t act."
         hooks = [
-            "Stop wasting your precious time on this mistake before it destroys your goal.",
-            "The biggest mistake stealing your success and focus every single day.",
-            "If you continue to scroll mindlessly, you are practically throwing away your future."
+            "You are losing 2 hours a day to this. Here is the exact fix nobody teaches you: [Topic].",
+            "99% of people stay stuck because of one hidden trap. It's called [Topic] — and it's fixable in 3 steps.",
+            "Every day you ignore this, your brain gets 1% weaker. The exact reason: [Topic].",
         ]
         value_delivery = """[VALUE DELIVERY]
 Stop throwing away your focus:
@@ -292,7 +308,7 @@ st.sidebar.subheader("🔑 Advanced API Keys")
 
 with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
     # Pexels Key
-    saved_pexels = clean_api_key(load_key_from_file("pexels_key.txt"))
+    saved_pexels = get_secret_key("PEXELS_API_KEY", "pexels_key.txt")
     raw_pexels_api_key = st.text_input("Pexels Key (Video)", type="password", value=saved_pexels)
     pexels_api_key = clean_api_key(raw_pexels_api_key)
     if pexels_api_key != saved_pexels:
@@ -301,7 +317,7 @@ with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
     st.write("")
         
     # Pixabay Key
-    saved_pixabay = clean_api_key(load_key_from_file("pixabay_key.txt"))
+    saved_pixabay = get_secret_key("PIXABAY_API_KEY", "pixabay_key.txt")
     raw_pixabay_api_key = st.text_input("Pixabay Key (Video)", type="password", value=saved_pixabay)
     pixabay_api_key = clean_api_key(raw_pixabay_api_key)
     if pixabay_api_key != saved_pixabay:
@@ -310,7 +326,7 @@ with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
     st.write("")
         
     # ElevenLabs Key
-    saved_eleven = clean_api_key(load_key_from_file("elevenlabs_key.txt"))
+    saved_eleven = get_secret_key("ELEVENLABS_API_KEY", "elevenlabs_key.txt")
     raw_elevenlabs_api_key = st.text_input("ElevenLabs Key (Voice)", type="password", value=saved_eleven)
     elevenlabs_api_key = clean_api_key(raw_elevenlabs_api_key)
     if elevenlabs_api_key != saved_eleven:
@@ -319,12 +335,25 @@ with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
     st.write("")
     
     # Hugging Face Key
-    saved_hf = clean_api_key(load_key_from_file("huggingface_token.txt"))
+    saved_hf = get_secret_key("HUGGINGFACE_TOKEN", "huggingface_token.txt")
     raw_hf_token = st.text_input("Hugging Face Token (AI Video)", type="password", value=saved_hf)
     huggingface_token = clean_api_key(raw_hf_token)
     if huggingface_token != saved_hf:
         save_key_to_file("huggingface_token.txt", huggingface_token)
     st.markdown(display_status_badge(test_huggingface_key_connection(huggingface_token)), unsafe_allow_html=True)
+    st.write("")
+    
+    # Pollinations Key (B3 — OPTIONAL): sk_/pk_ key = no rate limit, no watermark
+    saved_poll = get_secret_key("POLLINATIONS_KEY", "pollinations_key.txt")
+    raw_poll = st.text_input("Pollinations Key (optional — no watermark)", type="password", value=saved_poll)
+    pollinations_key = clean_api_key(raw_poll)
+    if pollinations_key != saved_poll:
+        save_key_to_file("pollinations_key.txt", pollinations_key)
+    if pollinations_key:
+        _poll_ok = pollinations_key.startswith(("sk_", "pk_"))
+        st.markdown(display_status_badge("valid" if _poll_ok else "invalid"), unsafe_allow_html=True)
+    else:
+        st.caption("⚪ Keyless works, but is rate-limited (~1 image/15s) and watermarked")
 
 st.sidebar.divider()
 all_shorts = db.get_all_shorts()
@@ -474,9 +503,10 @@ st.divider()
 st.subheader("🎛️ Step 3: Vocal & Styling Settings")
 col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
 
-ai_voice_label = col_s1.selectbox("🔊 Narrator Voice", ["Elite Deep Male", "Energetic Crisp Male", "Warm Professional Female", "Elegant British Female"])
-voice_mapping = {"Elite Deep Male": "en-US-ChristopherNeural", "Energetic Crisp Male": "en-US-GuyNeural", "Warm Professional Female": "en-US-AriaNeural", "Elegant British Female": "en-GB-SoniaNeural"}
-voice_code = voice_mapping[ai_voice_label]
+# PIECE 7 — VOICE TONES (ElevenLabs V3 presets: human tone, not V1 robot)
+ai_voice_label = col_s1.selectbox("🔊 Narrator Voice (V3 Tones)", list(video.VOICE_PRESETS.keys()))
+voice_code = {"Deep Narrator Male": "en-US-ChristopherNeural", "Energetic Male": "en-US-GuyNeural",
+              "Warm Female": "en-US-AriaNeural", "Calm British Female": "en-GB-SoniaNeural"}[ai_voice_label]
 
 pacing_label = col_s2.selectbox("⏱️ Video Pacing", [
     "⚡ Adrenaline ADHD (1.3s cuts)",
@@ -490,11 +520,12 @@ pacing_mapping = {
 }
 cut_duration_val = pacing_mapping[pacing_label]
 
-caption_theme_label = col_s3.selectbox("🔤 Caption Theme", ["🔥 Hormozi Gold style", "🌌 Cyberpunk Neon", "⚪ Minimalist White"])
+caption_theme_label = col_s3.selectbox("🔤 Caption Theme", ["⚪ Minimalist White (reference style)", "🎬 Cinematic Sentences (mystery style)", "🔥 Hormozi Gold style", "🌌 Cyberpunk Neon"])
 caption_mapping = {
+    "⚪ Minimalist White (reference style)": ("minimalist", "white"),
+    "🎬 Cinematic Sentences (mystery style)": ("cinematic", "white"),
     "🔥 Hormozi Gold style": ("hormozi", "yellow"),
-    "🌌 Cyberpunk Neon": ("cyberpunk", "cyan"),
-    "⚪ Minimalist White": ("minimalist", "white")
+    "🌌 Cyberpunk Neon": ("cyberpunk", "cyan")
 }
 caption_style_code, caption_color = caption_mapping[caption_theme_label]
 
@@ -525,8 +556,64 @@ meme_sfx_label = col_s5.selectbox("🔥 Meme Sound", [
 ])
 
 bg_music_path = "test.mp3" if ("Dramatic" in style_choice or "Urgency" in style_choice) else "backup.mp3"
-show_progress_bar = True
-music_volume = 0.12
+show_progress_bar = False
+music_volume = 0.09  # v2: voice-first mix — music sits clearly UNDER the voice
+
+# ==============================================================================
+# ELITE VISUAL STYLE SYSTEM — the 7-layer composition (reference: top faceless channels)
+# ==============================================================================
+st.markdown("#### 🎨 Elite Visual Style System")
+st.caption("Dark animated background (never pure black) + stacked hook text + script beats + cards + arrows + SFX — the exact layer system used by top faceless channels.")
+col_v1, col_v2, col_v3 = st.columns(3)
+bg_style_label = col_v1.selectbox("Background Style", [
+    "🕸️ Elite Dark Grid",
+    "🌠 Cosmic Gold (Cinematic)",
+    "🌌 Aurora Mesh",
+    "🎬 Red Pinstripe",
+    "✨ Glow Field"
+])
+bg_style_map = {"🕸️ Elite Dark Grid": "grid", "🌠 Cosmic Gold (Cinematic)": "cosmic", "🌌 Aurora Mesh": "aurora", "🎬 Red Pinstripe": "pinstripe", "✨ Glow Field": "glow"}
+bg_style_val = bg_style_map[bg_style_label]
+
+accent_label = col_v2.selectbox("Accent Color (one system, every video)", [
+    "⚡ Yellow (Attention)",
+    "🏆 Gold (Mystery/Cinematic)",
+    "🌿 Green (Growth)",
+    "🧊 Cyan (Tech)",
+    "🔥 Red (Urgency)",
+    "💜 Magenta (Drama)"
+])
+accent_map = {"⚡ Yellow (Attention)": "yellow", "🏆 Gold (Mystery/Cinematic)": "gold", "🌿 Green (Growth)": "green", "🧊 Cyan (Tech)": "cyan", "🔥 Red (Urgency)": "red", "💜 Magenta (Drama)": "magenta"}
+accent_val = accent_map[accent_label]
+
+clip_mode_label = col_v3.selectbox("Clip Mode (your HD clips)", [
+    "⚡ Full Auto (AI clips primary)",
+    "Blend over grid (stock)",
+    "Inset rounded window",
+    "Full screen",
+    "Text-first (no clips)"
+])
+clip_mode_map = {"⚡ Full Auto (AI clips primary)": "auto", "Blend over grid (stock)": "blend", "Inset rounded window": "inset", "Full screen": "full", "Text-first (no clips)": "none"}
+clip_mode_val = clip_mode_map[clip_mode_label]
+
+show_progress_bar = st.toggle("📊 Show progress bar (keep OFF — YouTube UI covers it)", value=False)
+
+# PIECE 9 — SFX KNOB (one slider controls the whole sound-design layer)
+sfx_level = st.slider("🔊 SFX Level (whole sound layer: hits, whooshes, ticks)", 0, 100, 70) / 100.0
+
+# PIECE 4 — CHARACTER BIBLE (the channel's locked visual identity)
+st.markdown("#### 👤 Character Bible (locked visual identity)")
+st.caption("One description + one fixed seed = the SAME look in every video. Set it once — video #50 looks like video #1.")
+bible = video.load_character_bible()
+col_b1, col_b2, col_b3 = st.columns([2, 3, 1])
+bib_enabled = col_b1.toggle("Character bible ON", value=bible.get("enabled", True))
+bib_name = col_b1.text_input("Character name", value=bible.get("name", "The Narrator"))
+bib_desc = col_b2.text_area("Character description (locked in every AI image)", value=bible.get("description", ""))
+bib_seed = col_b3.number_input("Seed (locked)", min_value=1, max_value=9999999, value=int(bible.get("seed", 421337)))
+if st.button("💾 Save Character Bible", use_container_width=False):
+    video.save_character_bible({"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
+                                "style_suffix": bible.get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")})
+    st.success("Bible saved — every future AI image uses this locked identity.")
 
 st.divider()
 
@@ -607,8 +694,8 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             custom_filepaths = [save_uploaded_file(f) for f in uploaded_files]
             
         try:
-            # Call our ultimate hybrid compiler!
-            v_path, a_path, vtt_path = video.create_hybrid_ai_video(
+            # Call our ultimate hybrid compiler! (returns 4-tuple: +auto thumbnail)
+            v_path, a_path, vtt_path, thumb_path = video.create_hybrid_ai_video(
                 short_id, 
                 preset_script, 
                 custom_filepaths, 
@@ -625,7 +712,14 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 b_roll_source=b_roll_source_val,
                 custom_scenarios=scenarios_input,
                 meme_sfx_name=meme_sfx_label,
-                hf_token=huggingface_token
+                hf_token=huggingface_token,
+                style_bg=bg_style_val,
+                style_accent=accent_val,
+                clip_mode=clip_mode_val,
+                voice_preset=ai_voice_label,
+                sfx_level=sfx_level,
+                character_bible={"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
+                                 "style_suffix": video.load_character_bible().get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")}
             )
             
             db.update_short_video(short_id, v_path, a_path, vtt_path, status='created')
@@ -633,10 +727,14 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             
             st.success("🎉 Your AI video has been compiled flawlessly!"); st.balloons()
             
-            # Display player nicely
+            # Display player + auto thumbnail (piece 11)
             col_p1, col_p2, col_p3 = st.columns([1.2, 1.6, 1.2])
             with col_p2:
                 st.video(v_path)
+            with col_p1:
+                if thumb_path and os.path.exists(thumb_path):
+                    st.markdown("**🖼️ Auto Thumbnail (upload-ready):**")
+                    st.image(thumb_path, use_container_width=True)
             
             with st.expander("📋 Click to Copy: Algorithmic SEO Copy Pack"):
                 seo_data = yt.generate_viral_seo_pack(preset_title, video.clean_script_for_speech(preset_script), "Self Improvement", trigger_used)
@@ -649,3 +747,67 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             st.error(f"⚠️ Render failure: {e}")
             with st.expander("🛠️ Debug Terminal & Crash Log Stack Trace"):
                 st.code(traceback.format_exc())
+
+# ------------------------------------------------------------------------------
+# PIECE 12 — BATCH MODE: the assembly line (5 topics in → 5 videos + 5 thumbs out)
+# "Lock a template → write all scripts → generate all videos → all QC → export."
+# ------------------------------------------------------------------------------
+st.divider()
+with st.expander("📦 Batch Mode — generate a week of videos in one run (assembly line)", expanded=False):
+    st.caption("Pro batch workflow: lock the style (set above), enter up to 5 topics, one click. Each video gets its own script, V3 voice, bible visuals, auto thumbnail.")
+    batch_topics = []
+    for i in range(5):
+        batch_topics.append(st.text_input(f"Topic {i+1} (leave empty to skip)", key=f"batch_topic_{i}"))
+    batch_topics = [t.strip() for t in batch_topics if t.strip()]
+    if st.button("🏭 GENERATE BATCH", type="primary", use_container_width=True, disabled=(len(batch_topics) == 0)):
+        batch_results = []
+        for i, btopic in enumerate(batch_topics):
+            st.markdown(f"### 🏭 Batch {i+1}/{len(batch_topics)}: {btopic[:60]}")
+            batch_bar = st.progress(0.0)
+            batch_status = st.empty()
+            def batch_progress(p, t, _bar=batch_bar, _st=batch_status):
+                _bar.progress(p)
+                _st.markdown(f"**Batch {i+1}:** {t} ... **{int(p*100)}%**")
+            try:
+                btitle, bscript, btags, btrigger = auto_generate_script_local(btopic, style_choice)
+                all_ch = db.get_all_channels()
+                if not all_ch:
+                    db.add_channel("My Faceless Empire", "Self Improvement", "10k")
+                    all_ch = db.get_all_channels()
+                bid = db.add_short(all_ch[0][0], btitle, bscript, btrigger, f"{btitle}\n\nBatch generated.", btags)
+                bv, ba, bvtt, bthumb = video.create_hybrid_ai_video(
+                    bid, bscript, None, voice_code, caption_color,
+                    bg_music_path=bg_music_path, bg_music_volume=music_volume,
+                    show_progress_bar=show_progress_bar,
+                    pexels_api_key=pexels_api_key if b_roll_source_val == "pexels" else (pixabay_api_key if b_roll_source_val == "pixabay" else ""),
+                    elevenlabs_api_key=elevenlabs_api_key,
+                    progress_callback=batch_progress,
+                    caption_style=caption_style_code,
+                    cut_duration=cut_duration_val,
+                    b_roll_source=b_roll_source_val,
+                    custom_scenarios=[],
+                    meme_sfx_name="None",
+                    hf_token=huggingface_token,
+                    style_bg=bg_style_val,
+                    style_accent=accent_val,
+                    clip_mode=clip_mode_val,
+                    voice_preset=ai_voice_label,
+                    sfx_level=sfx_level,
+                    character_bible={"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
+                                     "style_suffix": video.load_character_bible().get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")})
+                db.update_short_video(bid, bv, ba, bvtt, status='created')
+                batch_status.markdown(f"✅ **Batch {i+1} done:** {os.path.basename(bv)}")
+                # O2: force-free the frame buffers before the next batch video
+                # (5 videos in one process is what OOM-killed low-RAM hosts)
+                gc.collect()
+                try:
+                    video.prune_output_dirs()
+                except Exception:
+                    pass
+                if bthumb and os.path.exists(bthumb):
+                    st.image(bthumb, caption=f"Thumbnail {i+1}", use_container_width=False)
+                batch_results.append((btitle, bv, bthumb))
+            except Exception as be:
+                batch_status.error(f"❌ Batch {i+1} failed: {be}")
+        if batch_results:
+            st.success(f"🏭 BATCH COMPLETE — {len(batch_results)}/{len(batch_topics)} videos generated. All in Video Output.")
