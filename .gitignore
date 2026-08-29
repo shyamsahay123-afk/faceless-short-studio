@@ -21,3 +21,9 @@ temp_test.vtt
 *.srt
 *.mp4
 .github/
+
+# keep the reference SFX pack in git (the *.wav rule above would hide it)
+!sfx_library/
+!sfx_library/*.wav
+studio.log
+shorts_backup_*.db

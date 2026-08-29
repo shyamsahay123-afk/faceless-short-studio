@@ -50,10 +50,13 @@ Every item below was fixed in code and verified by a LIVE full-pipeline render
    [FIXED]           F4  HF circuit breaker: 2 consecutive failures → HF skipped
                         for 10 min (no more 40s dead attempts per clip).
    [FIXED]           F6/O4  ZIP is now key-free (keys never leave the user's PC).
- P3 — PARTIAL:
+ P3 — DONE (2026-08-29, round 2b):
    [DONE]            B7  error visibility (prints, fail-loud TTS guard).
-   [OPEN]            O4  auto-backup of shorts.db (low value, skip unless asked).
-   [OPEN]            full studio.log file logging (prints go to Streamlit console).
+   [DONE]            O4  auto-backup of shorts.db -> shorts_backup_YYYYMMDD.db
+                        after every render, newest 3 kept (db_manager.backup_db).
+   [DONE]            studio.log file logging (auto-truncates at ~1MB) + QC lines.
+ BONUS (2026-08-29): ref_video3.mp4 sound analysis complete — 9 real SFX
+   isolated into sfx_library/ and wired into the Meme Sound dropdown.
 
 TEST EVIDENCE (2026-08-29):
    - py_compile clean on all 7 modules; 0 bare excepts project-wide.

@@ -518,8 +518,16 @@ meme_sfx_label = col_s5.selectbox("🔥 Meme Sound", [
     "None",
     "Record Scratch",
     "Anime Wow",
-    "Bass Drop"
-])
+    "Bass Drop",
+    "Energy Flare",
+    "Tick Tock",
+    "Comet Whoosh",
+    "Clock Hit",
+    "Warp Whoosh",
+    "Riser",
+    "Climax Impact",
+    "Sub Boom"
+], help="First 3 = classic downloads. The rest = real SFX extracted from the viral reference short (reference pack).")
 
 bg_music_path = "test.mp3" if ("Dramatic" in style_choice or "Urgency" in style_choice) else "backup.mp3"
 show_progress_bar = False

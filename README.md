@@ -53,6 +53,15 @@ Every video gets the same 0.5s stinger at 0.0s, same volume. Pro channels are
 recognized by sound before the frame resolves — this is the ear's version of the
 character bible. Deterministic: identical on every machine, every day.
 
+## 🎧 4b. Reference SFX Pack (the sounds from your viral reference short)
+
+`ref_video3.mp4` was dissected: 9 real SFX were detected, isolated and saved in
+**`sfx_library/`** — the exact sounds the reference channel layers on its video:
+energy flare, flare tail, tick tock, comet whoosh, clock hit, warp whoosh,
+riser, climax impact, and the sub-bass outro boom. They're all in the
+**"Meme Sound"** dropdown (first 3 = classic downloads, rest = the reference
+pack, loaded instantly from the local folder — no download, no drift).
+
 ## 🎯 5. Hook Scorecard (pre-render gate)
 
 While you edit the script, the app scores the hook 0–100 (length, number, "you",
@@ -113,6 +122,14 @@ youtube_engine.py    SEO copy pack generator
 fonts/               Montserrat (latin) + Noto Sans Devanagari (Hindi) + DejaVu
 performance_log.json CTR learning log (auto-created)
 ```
+
+## 📁 Self-maintenance (automatic, nothing to do)
+
+- **`studio.log`** — every render logs its stages (voice result, b-roll source,
+  clip count, duration, QC report). It auto-truncates at ~1MB. When something
+  behaves weird, this is the first file to open.
+- **DB auto-backup** — after every render, `shorts.db` is copied to
+  `shorts_backup_YYYYMMDD.db`; only the newest 3 snapshots are kept.
 
 ## 🧯 Known limits (honest list)
 

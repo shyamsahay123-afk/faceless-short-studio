@@ -988,8 +988,30 @@ def download_free_soundtrack(track_name):
     return None
 
 # --- NATIVE AUTOMATIC ROYALTY-FREE MEME SOUND EFFECTS DOWNLOADER ---
+# REFERENCE SFX PACK — real SFX extracted from the viral reference short the
+# user provided (ref_video3). Local first (zero download time, zero drift);
+# the archive.org URLs below remain as the classic fallbacks.
+SFX_LIBRARY_DIR = os.path.join(BASE_DIR, "sfx_library")
+SFX_LIBRARY_MAP = {
+    "energy_flare": "fx_flare_1.wav",       # electric flare on the nebula (6.8s)
+    "flare_tail": "fx_flare_2.wav",         # sustained crackle tail (7.8s)
+    "tick_tock": "fx_tick.wav",             # clock scene ticks (13.1s)
+    "comet_whoosh": "fx_comet_whoosh.wav",  # rising whoosh on the comet (21.5s)
+    "clock_hit": "fx_clock_hit.wav",        # tick + low thud on the clock (40.4s)
+    "warp_whoosh": "fx_warp_whoosh.wav",    # warp/speed-line whoosh (43.4s)
+    "riser": "fx_riser.wav",                # build-up before the climax (53.3s)
+    "climax_impact": "fx_climax_impact.wav",# the "wake up" hit (59.5s)
+    "sub_boom": "fx_sub_boom.wav",          # sub-bass boom on the logo outro (61.8s)
+}
+
+
 def download_free_meme_sfx(sfx_name):
     name_clean = str(sfx_name).lower().replace(" ", "_")
+    # 1) local reference pack (instant, exact sound)
+    if name_clean in SFX_LIBRARY_MAP:
+        local_pack = os.path.join(SFX_LIBRARY_DIR, SFX_LIBRARY_MAP[name_clean])
+        if os.path.exists(local_pack):
+            return local_pack
     local_path = os.path.join(DEFAULT_DIR, f"meme_{name_clean}.mp3")
     if os.path.exists(local_path):
         return local_path
@@ -2415,7 +2437,31 @@ def run_qc_report(video_path, srt_path=None):
             report.append("⚠️ captions: no SRT found — check the TTS stage")
     except Exception as e:
         report.append(f"❌ QC failed: {e}")
+    for line in report:
+        log(f"QC {os.path.basename(str(video_path))}: {line}")
     return report
+
+
+# ==============================================================================
+# STUDIO LOG — persistent file log (studio.log next to the app).
+# Prints go to the console; the log survives and makes debugging easy after the
+# fact ("why did that render use pixabay?" — check the log).
+# Auto-truncates at ~1MB so it can never fill the disk.
+# ==============================================================================
+STUDIO_LOG_PATH = os.path.join(BASE_DIR, "studio.log")
+
+
+def log(msg):
+    try:
+        if os.path.exists(STUDIO_LOG_PATH) and os.path.getsize(STUDIO_LOG_PATH) > 1_000_000:
+            with open(STUDIO_LOG_PATH, "r", encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()[-400:]
+            with open(STUDIO_LOG_PATH, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+        with open(STUDIO_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
 
 
 # ==============================================================================
@@ -2424,6 +2470,8 @@ def run_qc_report(video_path, srt_path=None):
 def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
     timestamp = int(time.time())
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_{timestamp}.mp4")
+    _render_t0 = time.time()
+    log(f"RENDER START id={short_id} voice={voice_name}")
 
     progress_cb = kwargs.get("progress_callback", None)
 
@@ -2499,6 +2547,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             
     voice_audio = AudioFileClip(audio_path)
     duration = voice_audio.duration
+    log(f"VOICE OK {os.path.basename(audio_path)} dur={duration:.1f}s srt={os.path.basename(vtt_path) if vtt_path else 'NONE'}")
 
     # ====================================================================
     # NEW: ELITE STYLE SYSTEM — background style, accent color, clip mode
@@ -2868,6 +2917,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 
     # PRO PASS 6 — transition flash reserved for the 3 STRUCTURAL moments only:
     # hook→content, the reveal (climax), and the ending. Never on every cut.
+    log(f"BROLL DONE source={b_roll_source} clips={len(visual_clips)}")
     for _fl_t in (scene_boundaries[0][1] if scene_boundaries else 3.0,
                   arc_peak_t,
                   duration - 2.0):
@@ -3078,4 +3128,10 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         print(f"[Thumbnail] skipped: {e}")
 
     if progress_cb: progress_cb(1.00, "Render complete!")
+    log(f"RENDER DONE {os.path.basename(output_video_path)} in {time.time()-_render_t0:.0f}s thumb={os.path.basename(thumb_path) if thumb_path else 'none'}")
+    # auto-backup the database (keeps the newest 3 daily snapshots)
+    try:
+        db_settings.backup_db()
+    except Exception:
+        pass
     return output_video_path, audio_path, vtt_path, thumb_path

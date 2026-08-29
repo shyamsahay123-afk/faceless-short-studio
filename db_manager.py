@@ -1,5 +1,8 @@
 import sqlite3
 import os
+import time
+import shutil
+import glob
 
 # B8 follow-up: the DB must live next to the code, NOT in the working directory.
 # (daily.py / Task Scheduler can launch from any CWD — a relative path created
@@ -8,6 +11,24 @@ DB_NAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shorts.db')
 
 def get_connection():
     return sqlite3.connect(DB_NAME)
+
+def backup_db(keep=3):
+    """Auto-backup after each render: shorts.db -> shorts_backup_YYYYMMDD.db,
+    keeping only the newest `keep` snapshots. Silent on any failure."""
+    try:
+        d = os.path.dirname(DB_NAME) or "."
+        stamp = time.strftime("%Y%m%d")
+        dst = os.path.join(d, f"shorts_backup_{stamp}.db")
+        if os.path.exists(DB_NAME) and not os.path.exists(dst):
+            shutil.copy2(DB_NAME, dst)
+        backups = sorted(glob.glob(os.path.join(d, "shorts_backup_*.db")))
+        for old in backups[:-keep]:
+            try:
+                os.remove(old)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 def init_db():
     conn = get_connection()
