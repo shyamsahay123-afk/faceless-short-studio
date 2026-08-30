@@ -53,6 +53,16 @@ Every video gets the same 0.5s stinger at 0.0s, same volume. Pro channels are
 recognized by sound before the frame resolves — this is the ear's version of the
 character bible. Deterministic: identical on every machine, every day.
 
+## ✍️ Script Composer (v2 — the "AI" actually composes now)
+
+The old generator had **4 hardcoded bodies total** (one per style) — every video
+read the same paragraph with the topic swapped in. It is now a composer:
+per-style pools (8 hooks, 6-8 openers, 8-10 problems, 8 mechanisms, 6 turns,
+8-12 solutions, 6 CTAs) + a **no-repeat memory** (last 30 compositions stored
+in the db, collisions auto-reroll). Same topic, 12 renders = 12 different
+scripts. The save-list is built from the 3 solutions actually in the body
+(no more "body says one thing, list says three other things").
+
 ## 🌑 GOONINGGNG MODE (the measured style of your reference channel)
 
 One combination of settings reproduces the @GOONINGGNG look — every value below
