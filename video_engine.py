@@ -2820,8 +2820,14 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                     cand = np.random.uniform(0.0, raw_v.duration - clip_dur)
                     sub_start = cand
                     try:
-                        probe = raw_v.get_frame(cand + clip_dur / 2.0)
-                        if float(probe.mean()) >= 8.0:
+                        # 3-point probe (25/50/75%): a fade anywhere inside the
+                        # window must not leave a quarter of the scene black
+                        probe_ok = True
+                        for _fr in (0.25, 0.5, 0.75):
+                            if float(raw_v.get_frame(cand + clip_dur * _fr).mean()) < 8.0:
+                                probe_ok = False
+                                break
+                        if probe_ok:
                             break
                     except Exception:
                         break
@@ -2860,6 +2866,16 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 _seg_clips.append(sub_v)       # B5: close after final render
             else:
                 sub_v = raw_v.subclipped(sub_start, sub_start + clip_dur)
+            # --- SHORT-CLIP GUARD (blank-tail killer): if the usable clip is
+            # shorter than its scene window, the tail used to play pure void.
+            # Loop the clip to fill the window instead.
+            try:
+                if sub_v.duration < clip_dur - 0.15:
+                    _loops = int(np.ceil(clip_dur / sub_v.duration)) + 1
+                    from moviepy import concatenate_videoclips as _catv
+                    sub_v = _catv([sub_v] * _loops).subclipped(0, clip_dur)
+            except Exception as e:
+                print(f"[Broll] loop-fill failed ({e}); tail may be short")
             if clip_mode == "none":
                 return True  # text-first mode: background + text only
             dark = (clip_mode == "blend")
