@@ -957,6 +957,10 @@ def make_outro_card(handle, code, accent="yellow", w=720, h=1280):
         handle_txt = "@" + handle_txt
     f = get_pil_font(58, bold=True, text=handle_txt)
     tw, th, ox, oy = _measure_text(handle_txt, f, 3)
+    if tw > w - 80:   # long handle: shrink to fit the card
+        size = max(30, int(58 * (w - 80) / tw))
+        f = get_pil_font(size, bold=True, text=handle_txt)
+        tw, th, ox, oy = _measure_text(handle_txt, f, 3)
     d.text(((w - tw) // 2 - ox, h // 2 - 110 - oy), handle_txt, font=f,
            fill=(235, 238, 245), stroke_width=3, stroke_fill=(0, 0, 0))
     f2 = get_pil_font(28, bold=False, text="x")

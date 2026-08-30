@@ -2396,17 +2396,26 @@ def run_qc_report(video_path, srt_path=None, cosmic=False, watermark=None):
                       else f"⚠️ duration {dur:.1f}s (target 25-60s)")
 
         # 2) DEAD-FRAME SCAN — lists EVERY dead second (the "video is blank
-        #    after some time" class; the user used to find these by watching)
+        #    after some time" class; the user used to find these by watching).
+        #    Rules that keep the panel honest (no false alarms):
+        #    - scans the TOP 75% of the frame (the caption zone can't mask a
+        #      dead frame, and caption text isn't a "dead frame" signal)
+        #    - a frame with visible text/graphics (keyword cards) is intentional
+        #    - in void mode the final 4.5s is the dark outro card (checked
+        #      separately by its own test) — not a dead frame
         dead = []
         min_lum, worst_t = 255.0, 0.0
+        scan_end = dur - 4.5 if cosmic else dur - 0.2
         t = 0.0
-        while t < dur - 0.2:
+        while t < scan_end:
             try:
                 f = clip.get_frame(t)
-                lum = float(f.mean())
+                top = f[: int(f.shape[0] * 0.75), :, :]
+                lum = float(top.mean())
+                bright = float((top.max(axis=2) > 100).mean())
                 if lum < min_lum:
                     min_lum, worst_t = lum, t
-                if lum < 10:
+                if lum < 10 and bright < 0.002:
                     dead.append(int(round(t)))
             except Exception:
                 pass
@@ -2693,6 +2702,13 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     clip_mode = str(kwargs.get("clip_mode", "blend")).lower()
     # GOONINGGNG mode: "void" background auto-brings the cosmic grade on all b-roll
     cosmic = (style_bg == "void")
+    # PACING MODE — the Video Pacing dropdown (adrenaline/cinematic/mindful/cosmic).
+    # Defined HERE (before the expectation gate) so the gate can inspect it.
+    pacing = str(kwargs.get("pacing", "cinematic")).lower()
+    # PIECE 4 — CHARACTER BIBLE (loaded EARLY: the expectation gate inspects it
+    # for the watermark handle. Moving this down was a latent NameError in
+    # void mode — the gate ran before the bible existed.)
+    channel_bible = kwargs.get("character_bible", None) or load_character_bible()
     # EXPECTATION GATE — warn LOUDLY about config issues BEFORE burning 5
     # minutes on a video that will miss the expected style (the "@yourchannel
     # on the outro" class of surprise, caught pre-render instead of post)
@@ -2741,10 +2757,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     # PASS 2 — RHYTHM: tension-based shot lengths, cut-on-word, 2.5s hard
     # cap, 2-fast-then-slow breathing (replaces random pacing)
     if progress_cb: progress_cb(0.29, "PRO EDITOR: paper cut (beat map) + pro rhythm (tension cuts on words)...")
-    # PACING MODE — the Video Pacing dropdown is now LIVE (was a dead knob):
-    #   adrenaline = fast ADHD cuts · cinematic = default · mindful = slower
-    #   cosmic = GOONINGGNG grammar: one visual per thought, 4-9s holds
-    pacing = str(kwargs.get("pacing", "cinematic")).lower()
+    # PACING MODE (already defined above, before the expectation gate)
     scene_boundaries = None
     if pe is not None:
         try:
@@ -2826,10 +2839,8 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             
     custom_files = uploaded_file_paths if uploaded_file_paths else []
     b_roll_source = kwargs.get("b_roll_source", "pexels").lower()
+    # (channel_bible was loaded early, before the expectation gate)
 
-    # PIECE 4 — CHARACTER BIBLE: the channel's locked visual identity
-    channel_bible = kwargs.get("character_bible", None) or load_character_bible()
-    
     # Read custom storyboard scenarios list if passed!
     custom_scenarios = kwargs.get("custom_scenarios", [])
     
