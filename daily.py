@@ -1,16 +1,21 @@
 # ==============================================================================
-# DAILY AUTOPILOT — one command, one video, every day (the consistency machine)
+# DAILY AUTOPILOT — the consistency machine. Your time is the scarce resource,
+# so this exists to make videos WITHOUT you sitting at the PC.
 #
 #   py daily.py                     -> next topic from queue.txt, render, publish
+#   py daily.py --count 5           -> 5 videos in one run (run it when the PC
+#                                      is on + powered; walks the queue)
 #   py daily.py --topic "my idea"   -> render THIS topic (queue untouched)
 #   py daily.py --lang hi           -> Hindi voice variant (same visual identity)
 #   py daily.py --no-publish        -> render only (no git push to the videos repo)
 #
-# Windows daily schedule (run once, then it fires every day at 09:00):
-#   schtasks /create /sc daily /st 09:00 /tn "FacelessDaily" /tr "py D:\2\myuse\daily.py"
+# Windows schedule — one evening command a week is enough; the PC just has to
+# be ON + plugged in when it fires:
+#   schtasks /create /sc weekly /d MON /st 21:00 /tn "ShortsBatch" /tr "py D:\2\myuse\daily.py --count 2"
 #
-# Flow: queue -> script (hook-score gated) -> render (locked channel style)
-#       -> database -> publish to the GitHub videos repo -> daily_log.txt
+# Flow: queue -> script composer (hook-score gated) -> render (locked style)
+#       -> database -> QC self-audit -> publish to the GitHub videos repo
+#       -> daily_log.txt
 # ==============================================================================
 import os
 import sys
@@ -116,23 +121,12 @@ VOICE_MAP = {
 }
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Faceless AI Short Studio — daily autopilot")
-    ap.add_argument("--topic", help="render THIS topic (queue untouched)")
-    ap.add_argument("--lang", choices=["en", "hi"], default="en", help="voice language")
-    ap.add_argument("--no-publish", action="store_true", help="skip the git push")
-    args = ap.parse_args()
-
-    st = load_settings()
+def render_one(topic, st, args):
+    """Render + QC + publish ONE video. Returns 0 on success, 1 on failure."""
     print("=" * 62)
-    print("FACELESS AI SHORT STUDIO — DAILY AUTOPILOT")
+    print(f"FACELESS AI SHORT STUDIO — AUTOPILOT: {topic[:50]}")
     print("=" * 62)
 
-    # 1) TOPIC
-    topic = args.topic or pop_queue_topic()
-    if not topic:
-        print("queue.txt is empty — add one topic per line, or pass --topic")
-        return 1
     print(f"[1/6] Topic: {topic}")
 
     # 2) SCRIPT (hook-score gated: regenerates weak hooks)
@@ -140,7 +134,7 @@ def main():
     title, script, tags, trigger, hook_score = generate_script_with_score(
         topic, st["topic_style"], min_score=int(st["hook_min_score"]), tries=6)
     if title == "Safety Warning":
-        print("Blocked by safety filter — pick another topic.")
+        print("Blocked by safety filter — skipping this topic.")
         return 1
     print(f"[2/6] Script drafted (hook score {hook_score}/100) in {time.time()-t0:.0f}s")
     print(f"      Hook: {best_hook_line(script)[:90]}")
@@ -165,23 +159,31 @@ def main():
     eleven_key = read_key("elevenlabs_key.txt")
     hf_token = read_key("huggingface_token.txt")
     t0 = time.time()
-    v_path, a_path, srt_path, thumb_path = video.create_hybrid_ai_video(
-        short_id, script, None, voice_code, "yellow",
-        bg_music_path="auto", bg_music_volume=float(st["music_volume"]),
-        pexels_api_key=pexels_key or (pixabay_key if st["b_roll_source"] == "pixabay" else ""),
-        elevenlabs_api_key=eleven_key or None,
-        caption_style=st["caption_style"],
-        b_roll_source=st["b_roll_source"],
-        meme_sfx_name="None",
-        hf_token=hf_token or None,
-        style_bg=st["bg_style"],
-        style_accent=st["accent"],
-        clip_mode=st["clip_mode"],
-        voice_preset=voice_preset,
-        sfx_level=float(st["sfx_level"]),
-        pacing=st.get("pacing", "cinematic"),
-        character_bible=_bible,
-    )
+    try:
+        v_path, a_path, srt_path, thumb_path = video.create_hybrid_ai_video(
+            short_id, script, None, voice_code, "yellow",
+            bg_music_path="auto", bg_music_volume=float(st["music_volume"]),
+            pexels_api_key=pexels_key or (pixabay_key if st["b_roll_source"] == "pixabay" else ""),
+            elevenlabs_api_key=eleven_key or None,
+            caption_style=st["caption_style"],
+            b_roll_source=st["b_roll_source"],
+            meme_sfx_name="None",
+            hf_token=hf_token or None,
+            style_bg=st["bg_style"],
+            style_accent=st["accent"],
+            clip_mode=st["clip_mode"],
+            voice_preset=voice_preset,
+            sfx_level=float(st["sfx_level"]),
+            pacing=st.get("pacing", "cinematic"),
+            character_bible=_bible,
+        )
+    except Exception as e:
+        print(f"[4/6] RENDER FAILED: {e} — continuing to next topic.")
+        try:
+            db.update_short_status(short_id, "failed")
+        except Exception:
+            pass
+        return 1
     db.update_short_video(short_id, v_path, a_path, srt_path, status="created")
     print(f"[4/6] Render complete in {time.time()-t0:.0f}s")
     print(f"      Video:  {os.path.basename(v_path)}")
@@ -201,7 +203,7 @@ def main():
         print("[5/6] QC self-audit (dead frames / style / outro / watermark / audio / captions):")
         for line in report:
             print("      " + line)
-        if any(l.startswith(("⚠", "❌")) for l in report):
+        if any(l.startswith(("⚠", "")) for l in report):
             print("      >>> QC FOUND ISSUES — check the timestamps above before uploading")
     except Exception as e:
         print(f"[5/6] QC skipped: {e}")
@@ -221,8 +223,41 @@ def main():
         f.write(f"{time.strftime('%Y-%m-%d %H:%M')} | {topic} | hook {hook_score} | "
                 f"{os.path.basename(v_path)}\n")
     print("-" * 62)
-    print("DONE. Next topic is already at the top of queue.txt.")
+    print("DONE with this video.")
     return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Faceless AI Short Studio — daily autopilot")
+    ap.add_argument("--topic", help="render THIS topic (queue untouched)")
+    ap.add_argument("--count", type=int, default=1,
+                    help="render N queued videos in one run (the 'make a batch while I sleep' flag)")
+    ap.add_argument("--lang", choices=["en", "hi"], default="en", help="voice language")
+    ap.add_argument("--no-publish", action="store_true", help="skip the git push")
+    args = ap.parse_args()
+
+    st = load_settings()
+
+    # single explicit topic: render just that one
+    if args.topic:
+        return render_one(args.topic, st, args)
+
+    # queue batch: pop up to `count` topics, render each, keep going on failure
+    done = failed = 0
+    for _ in range(max(1, args.count)):
+        topic = pop_queue_topic()
+        if not topic:
+            print("queue.txt is empty — add one topic per line to keep the line moving.")
+            break
+        rc = render_one(topic, st, args)
+        if rc == 0:
+            done += 1
+        else:
+            failed += 1
+    print("=" * 62)
+    print(f"BATCH COMPLETE: {done} rendered, {failed} failed. "
+          f"Topics left in queue: see queue.txt.")
+    return 0 if done >= 1 else 1
 
 
 if __name__ == "__main__":
