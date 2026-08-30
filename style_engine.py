@@ -1021,5 +1021,5 @@ def grade_frame_cosmic(arr):
     if cur > 1.0:
         a = a * (24.0 / cur)
     a = np.where(a > 160.0, 160.0 + (a - 160.0) * 0.25, a)
-    a = np.clip(a, 3.0, 255)
+    a = np.clip(a, 8.0, 255)   # floor 8: near-black sources must keep visible structure
     return a.astype("uint8")

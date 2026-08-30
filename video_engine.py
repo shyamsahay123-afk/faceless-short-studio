@@ -551,9 +551,9 @@ COSMIC_SEARCHES = {
     "mind": "milky way stars night sky dark",
     "neuro": "brain neurons dark macro",
     "dopamine": "neurons firing dark macro",
-    "time": "antique clock dark macro",
-    "clock": "antique clock face dark",
-    "habit": "antique clock hands dark macro",
+    "time": "vintage clock face roman numerals dark",
+    "clock": "vintage clock face roman numerals dark",
+    "habit": "vintage clock face roman numerals dark",
     "fear": "dark red nebula space",
     "anxiety": "dark nebula space storm",
     "trap": "dark nebula space vortex",
@@ -563,8 +563,8 @@ COSMIC_SEARCHES = {
     "focus": "single star night sky dark",
     "attention": "shooting star night sky",
     "decision": "two stars night sky dark",
-    "willpower": "clock mechanism dark macro",
-    "discipline": "clock hands dark macro",
+    "willpower": "vintage clock face roman numerals dark",
+    "discipline": "vintage clock face roman numerals dark",
     "overthinking": "spiral galaxy dark",
     "sleep": "moon stars night sky dark",
     "dream": "nebula purple dark space",
@@ -585,10 +585,10 @@ COSMIC_SEARCHES = {
     "habit_": "clock dark macro",
 }
 COSMIC_POOL = [
-    "dark nebula space slow", "galaxy stars night sky", "antique clock dark",
+    "dark nebula space slow", "galaxy stars night sky", "vintage clock face roman numerals",
     "brain neurons dark", "comet star field night", "milky way stars dark",
     "eclipse dark space", "moon stars night sky", "spiral galaxy dark",
-    "clock mechanism macro dark", "ink in water dark", "dark ocean wave night",
+    "vintage clock face roman numerals", "ink in water dark", "dark ocean wave night",
 ]
 
 # --- VTT-SYNCED B-ROLL SELECTION (pro fix: the clip must match the word being
@@ -777,9 +777,16 @@ def download_pexels_b_roll(query, api_key):
                     
                 if target_link:
                     video_res = requests.get(target_link, timeout=40)
+                    # CORRUPT-DOWNLOAD GUARD: CDN errors can arrive as HTTP 200
+                    # with an HTML body — writing that to .mp4 creates a file
+                    # that crashes the render or plays as a dead-black frame.
                     if video_res.status_code == 200:
+                        body = video_res.content
+                        if len(body) < 50000 or body[4:8] != b"ftyp":
+                            print(f"Pexels: bad file for '{clean_query}' (not a valid mp4) — skipping")
+                            return None
                         with open(local_path, "wb") as f:
-                            f.write(video_res.content)
+                            f.write(body)
                         return local_path
     except Exception as e:
         print(f"Pexels search failed for '{query}': {e}")
@@ -2801,10 +2808,30 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     def add_broll(clip_path, start_t, clip_dur, idx):
         try:
             raw_v = VideoFileClip(clip_path)
+            # --- BLACK-FRAME GUARD (the dead-black full-frame was the #1
+            # "not as expected" artifact): probe candidate windows and only
+            # accept one whose content is actually visible. Fades, corrupt
+            # mid-sections and all-black sources get rejected -> the scene
+            # falls through to the text-first card instead of showing black.
             sub_start = 0.0
             if raw_v.duration > clip_dur + 1.0:
                 np.random.seed(idx)
-                sub_start = np.random.uniform(0.0, raw_v.duration - clip_dur)
+                for _ in range(4):
+                    cand = np.random.uniform(0.0, raw_v.duration - clip_dur)
+                    sub_start = cand
+                    try:
+                        probe = raw_v.get_frame(cand + clip_dur / 2.0)
+                        if float(probe.mean()) >= 8.0:
+                            break
+                    except Exception:
+                        break
+            else:
+                try:
+                    if float(raw_v.get_frame(max(0.05, raw_v.duration / 2.0)).mean()) < 6.0:
+                        raw_v.close()
+                        return False   # source is all black -> text-first fallback
+                except Exception:
+                    pass
             # --- MEMORY-SAFE SEGMENT EXTRACTION ---
             # Extract the exact 1-2s segment to a tiny temp file, then close the big
             # source reader immediately. Prevents the ~30 open ffmpeg readers from
