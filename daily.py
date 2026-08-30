@@ -193,12 +193,16 @@ def main():
     except Exception:
         pass
 
-    # 5) QC REPORT
+    # 5) CONFORMANCE AUDIT — the render witnesses itself before you watch it
     try:
-        report = video.run_qc_report(v_path, srt_path)
-        print("[5/6] QC report:")
+        report = video.run_qc_report(v_path, srt_path,
+                                     cosmic=(st.get("bg_style") == "void"),
+                                     watermark=st.get("watermark"))
+        print("[5/6] QC self-audit (dead frames / style / outro / watermark / audio / captions):")
         for line in report:
             print("      " + line)
+        if any(l.startswith(("⚠", "❌")) for l in report):
+            print("      >>> QC FOUND ISSUES — check the timestamps above before uploading")
     except Exception as e:
         print(f"[5/6] QC skipped: {e}")
 

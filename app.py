@@ -714,6 +714,20 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             st.session_state['last_render_srt'] = vtt_path  # enables Retention Re-Cut
             st.session_state['last_render_video_name'] = os.path.basename(v_path)
             status_text.markdown("🤖 **AI Active:** Render complete! ... **100%**")
+
+            # CONFORMANCE AUDIT — the render reports itself BEFORE you watch.
+            # Dead frames, style drift, missing outro/watermark/captions, dead
+            # audio: all flagged with exact timestamps.
+            try:
+                _qc = video.run_qc_report(v_path, vtt_path, cosmic=(bg_style_val == "void"), watermark=bib_handle)
+                _qc_warn = [l for l in _qc if l.startswith("⚠") or l.startswith("❌")]
+                with st.expander("🔍 QC Self-Audit — " + ("ISSUES FOUND, timestamps below" if _qc_warn else "all clear"), expanded=bool(_qc_warn)):
+                    for _l in _qc:
+                        st.text(_l)
+                if _qc_warn:
+                    st.warning("QC found issues above — the timestamp tells you exactly where. Send me that line and I fix that layer.")
+            except Exception as _qe:
+                st.caption(f"QC skipped: {_qe}")
             
             st.success("🎉 Your AI video has been compiled flawlessly!"); st.balloons()
             
@@ -792,6 +806,14 @@ with st.expander("📦 Batch Mode — generate a week of videos in one run (asse
                 st.session_state['last_render_srt'] = bvtt  # enables Retention Re-Cut
                 st.session_state['last_render_video_name'] = os.path.basename(bv)
                 batch_status.markdown(f"✅ **Batch {i+1} done:** {os.path.basename(bv)}")
+                # conformance audit: surface issues per video (exact timestamps)
+                try:
+                    _bqc = video.run_qc_report(bv, bvtt, cosmic=(bg_style_val == "void"), watermark=bib_handle)
+                    _bw = [l for l in _bqc if l.startswith("⚠") or l.startswith("❌")]
+                    if _bw:
+                        batch_status.warning("Batch QC: " + " · ".join(_bw[:3]))
+                except Exception:
+                    pass
                 # O2: force-free the frame buffers before the next batch video
                 # (5 videos in one process is what OOM-killed low-RAM hosts)
                 gc.collect()

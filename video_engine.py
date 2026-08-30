@@ -2380,7 +2380,12 @@ def load_and_mix_audio(voice_audio_path, bg_music_path=None, bg_music_volume=0.1
 # QC REPORT — the 5-line verdict on the FINISHED file (you stop catching
 # bad renders by watching: the report tells you before you upload)
 # ==============================================================================
-def run_qc_report(video_path, srt_path=None):
+def run_qc_report(video_path, srt_path=None, cosmic=False, watermark=None):
+    """CONFORMANCE AUDIT — the render witnesses itself.
+    Every check corresponds to a complaint class a human would otherwise
+    have to find by WATCHING the video. Output: ✅/⚠️ lines with exact
+    timestamps, printed + saved to studio.log. This is the gap-filler:
+    the machine reports the blank frame before the user does."""
     report = []
     try:
         clip = VideoFileClip(video_path)
@@ -2390,7 +2395,9 @@ def run_qc_report(video_path, srt_path=None):
         report.append(f"✅ duration {dur:.1f}s" if 25 <= dur <= 60
                       else f"⚠️ duration {dur:.1f}s (target 25-60s)")
 
-        # 2) luminance floor — no dead-black frames
+        # 2) DEAD-FRAME SCAN — lists EVERY dead second (the "video is blank
+        #    after some time" class; the user used to find these by watching)
+        dead = []
         min_lum, worst_t = 255.0, 0.0
         t = 0.0
         while t < dur - 0.2:
@@ -2399,66 +2406,107 @@ def run_qc_report(video_path, srt_path=None):
                 lum = float(f.mean())
                 if lum < min_lum:
                     min_lum, worst_t = lum, t
+                if lum < 10:
+                    dead.append(int(round(t)))
             except Exception:
                 pass
             t += 1.0
-        report.append(f"✅ luminance floor {min_lum:.0f}/255 (no dead-black frames)"
-                      if min_lum >= 8 else f"⚠️ near-black frame at {worst_t:.0f}s (luminance {min_lum:.0f})")
+        if dead:
+            report.append(f"⚠️ DEAD FRAME(S) at {dead} — those seconds render black (b-roll failed to fill)")
+        else:
+            report.append(f"✅ no dead frames (luminance floor {min_lum:.0f}/255)")
 
-        # 3) hook presence — bright text pixels in the top band within 1.2s
+        # 3) STYLE CONFORMANCE — measure the render against the reference's
+        #    measured numbers (ref_video3: mean lum ~22/255, saturation ~2%)
+        if cosmic:
+            try:
+                fm = clip.get_frame(dur * 0.5)
+                lum_m = 0.2126 * fm[..., 0] + 0.7152 * fm[..., 1] + 0.0722 * fm[..., 2]
+                mx, mn = fm.max(axis=2), fm.min(axis=2)
+                sat = ((mx - mn) / np.maximum(mx, 1)) * (lum_m / 255 + 0.001)
+                ok = 10 <= float(lum_m.mean()) <= 34 and float(sat.mean()) < 0.12
+                report.append(f"✅ cosmic grade in range (lum {lum_m.mean():.0f}/255, sat {sat.mean()*100:.0f}% — ref ~22/2)"
+                              if ok else f"⚠️ cosmic grade OFF-TARGET (lum {lum_m.mean():.0f}, sat {sat.mean()*100:.0f}%) — reference is ~22 lum / 2% sat")
+            except Exception:
+                pass
+
+        # 4) hook presence — bright text in the top band within 1.2s
         try:
             f1 = clip.get_frame(min(0.6, dur / 2))
             top = f1[:400, :, :]
             bright = (0.2126 * top[..., 0] + 0.7152 * top[..., 1] + 0.0722 * top[..., 2]) > 150
             frac = float(bright.mean())
-            report.append(f"✅ hook text visible early ({frac * 100:.0f}% bright top-band pixels)"
-                          if frac > 0.02 else "⚠️ no bright text detected in the first 1.2s — check the hook layer")
+            report.append(f"✅ hook text visible early ({frac * 100:.0f}% bright top-band)"
+                          if frac > 0.02 else "⚠️ no bright text in first 1.2s — hook layer may be missing")
         except Exception:
             report.append("⚠️ hook check failed (frame read)")
 
-        # 4) frozen-frame check (first vs last frame)
-        try:
-            f0 = clip.get_frame(0.4)
-            fE = clip.get_frame(max(0.4, dur - 0.4))
-            diff = float(np.abs(f0.astype(float) - fE.astype(float)).mean())
-            report.append(f"✅ footage is moving (frame delta {diff:.1f})"
-                          if diff >= 1.0 else "⚠️ first and last frames nearly identical — possible frozen clip")
-        except Exception:
-            pass
+        # 5) OUTRO CARD (cosmic): the final 4s should be the dark card
+        if cosmic:
+            try:
+                lum_out = float(clip.get_frame(max(0.5, dur - 1.5)).mean())
+                report.append("✅ outro card present (final 4s)" if lum_out < 18
+                              else "⚠️ no dark outro card in the final 4s — code/watermark outro missing")
+            except Exception:
+                pass
 
-        # 5) audio: loudness + silent gaps
+        # 6) WATERMARK (if configured): bright pixels in the top-right region
+        if watermark and str(watermark).strip() not in ("", "@yourchannel"):
+            try:
+                fw = clip.get_frame(min(10, dur - 5))
+                region = fw[:70, -300:, :]
+                bright = (0.2126 * region[..., 0] + 0.7152 * region[..., 1] + 0.0722 * region[..., 2]) > 120
+                report.append("✅ watermark visible top-right" if float(bright.mean()) > 0.0008
+                              else "⚠️ watermark NOT visible top-right — check the bible handle")
+            except Exception:
+                pass
+
+        # 7) audio: loudness + per-second dead-audio scan
         try:
             a = clip.audio
             arr = a.to_soundarray(fps=22050, quantize=False)
             mono = arr.mean(axis=1) if arr.ndim > 1 else arr
             rms = float(np.sqrt(np.mean(mono ** 2)))
-            lufs_est = 20 * np.log10(max(rms, 1e-6)) + 10.0   # 0.063 RMS ≈ -14 LUFS for speech
+            lufs_est = 20 * np.log10(max(rms, 1e-6)) + 10.0   # 0.063 RMS ≈ -14 LUFS
             report.append(f"✅ loudness ≈ {lufs_est:.0f} LUFS (target ≈ -14)"
                           if -18 <= lufs_est <= -11 else f"⚠️ loudness ≈ {lufs_est:.0f} LUFS (target -18..-11)")
-            sil = np.abs(mono) < 0.008
-            step = int(0.1 * 22050)
-            run = gaps = 0
-            for i in range(step, len(sil), step):
-                run = run + 1 if sil[i] else 0
-                if run == 8:      # 0.8s of silence
-                    gaps += 1
-                    run = 0
-            report.append("✅ no silent gaps > 0.8s" if gaps == 0 else f"⚠️ {gaps} silent gap(s) > 0.8s in the mix")
+            dead_aud = [i for i in range(int(dur))
+                        if len(mono[i*22050:(i+1)*22050]) and abs(mono[i*22050:(i+1)*22050]).mean() < 0.004]
+            if dead_aud:
+                report.append(f"⚠️ DEAD AUDIO at {dead_aud} — voice/music silent in those seconds")
+            else:
+                report.append("✅ no dead-audio seconds")
         except Exception as e:
             report.append(f"⚠️ audio QC failed: {e}")
 
         clip.close()
 
-        # 6) captions
+        # 8) captions alive — sample up to 5 cue times, text must be visible
         subs = parse_vtt(srt_path) if srt_path else []
-        if len(subs) >= 8:
-            report.append(f"✅ captions: {len(subs)} word cues (word-synced layer alive)")
-        elif subs:
-            report.append(f"⚠️ captions: only {len(subs)} cues — sync may be degraded")
+        if subs:
+            step_ = max(1, len(subs) // 5)
+            sample_ts = [s["start"] + 0.1 for s in subs[::step_]]
+            cap_ok, checked = 0, 0
+            clip2 = VideoFileClip(video_path)
+            for ts_ in sample_ts:
+                if ts_ < 1 or ts_ > dur - 5:
+                    continue
+                checked += 1
+                try:
+                    fc = clip2.get_frame(ts_)
+                    bottom = fc[int(fc.shape[0] * 0.72):, :, :]
+                    bright = (0.2126 * bottom[..., 0] + 0.7152 * bottom[..., 1] + 0.0722 * bottom[..., 2]) > 140
+                    if float(bright.mean()) > 0.0015:
+                        cap_ok += 1
+                except Exception:
+                    pass
+            clip2.close()
+            report.append(f"✅ captions alive ({cap_ok}/{checked} sampled cue frames show text)"
+                          if cap_ok > 0 else "⚠️ captions NOT visible at sampled cue times — caption layer dead")
         else:
-            report.append("⚠️ captions: no SRT found — check the TTS stage")
+            report.append("⚠️ captions: no SRT found — word-sync layer never built")
     except Exception as e:
-        report.append(f"❌ QC failed: {e}")
+        report.append(f"❌ audit failed: {e}")
     for line in report:
         log(f"QC {os.path.basename(str(video_path))}: {line}")
     return report
@@ -2645,6 +2693,17 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     clip_mode = str(kwargs.get("clip_mode", "blend")).lower()
     # GOONINGGNG mode: "void" background auto-brings the cosmic grade on all b-roll
     cosmic = (style_bg == "void")
+    # EXPECTATION GATE — warn LOUDLY about config issues BEFORE burning 5
+    # minutes on a video that will miss the expected style (the "@yourchannel
+    # on the outro" class of surprise, caught pre-render instead of post)
+    if cosmic:
+        _wm_g = str((channel_bible or {}).get("watermark", "") or "").strip()
+        if not _wm_g or _wm_g == "@yourchannel":
+            print("[GATE] ⚠ no watermark handle set — the outro will show '@yourchannel' and NO frame watermark. Set it in the Character Bible (or daily_settings.json).")
+        if pacing != "cosmic":
+            print(f"[GATE] NOTE: void style with '{pacing}' pacing — the reference grammar is 'cosmic' (4-9s holds).")
+        if clip_mode == "blend":
+            print("[GATE] NOTE: void + blend mode — the reference shows b-roll 'full' (the clip IS the visual).")
     accent_rgb = (255, 215, 0)
     if se is not None:
         accent_rgb = se.ACCENTS.get(style_accent, (255, 215, 0))
@@ -2832,10 +2891,20 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                     except Exception:
                         break
             else:
+                # short source: the whole thing is the window — probe three
+                # points, reject if any is black (a black clip held as
+                # "previous visual" is what blanked the whole back half of
+                # the NEW3 render)
                 try:
-                    if float(raw_v.get_frame(max(0.05, raw_v.duration / 2.0)).mean()) < 6.0:
+                    black_seen = False
+                    for _fr in (0.25, 0.5, 0.75):
+                        _pt = max(0.05, min(raw_v.duration - 0.05, raw_v.duration * _fr))
+                        if float(raw_v.get_frame(_pt).mean()) < 8.0:
+                            black_seen = True
+                            break
+                    if black_seen:
                         raw_v.close()
-                        return False   # source is all black -> text-first fallback
+                        return False   # source is black -> text-first fallback
                 except Exception:
                     pass
             # --- MEMORY-SAFE SEGMENT EXTRACTION ---
