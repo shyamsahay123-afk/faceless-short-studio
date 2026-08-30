@@ -475,10 +475,10 @@ voice_code = {"Deep Narrator Male": "en-US-ChristopherNeural", "Energetic Male":
               "🇮🇳 Hindi Female (Swara)": "hi-IN-SwaraNeural"}[ai_voice_label]
 
 pacing_label = col_s2.selectbox("⏱️ Video Pacing (now LIVE)", [
+    "🌑 Deep Cosmic (4-9s holds — GOONINGGNG)",
     "⚡ Adrenaline ADHD (1.3s cuts)",
     "🎬 Cinematic (2.0s cuts)",
-    "🌌 Mindful Slower (3.2s cuts)",
-    "🌑 Deep Cosmic (4-9s holds — GOONINGGNG)"
+    "🌌 Mindful Slower (3.2s cuts)"
 ])
 pacing_mapping = {
     "⚡ Adrenaline ADHD (1.3s cuts)": ("adrenaline", 1.3),
@@ -488,7 +488,7 @@ pacing_mapping = {
 }
 pacing_code, cut_duration_val = pacing_mapping[pacing_label]
 
-caption_theme_label = col_s3.selectbox("🔤 Caption Theme", ["⚪ Minimalist White (reference style)", "🎬 Cinematic Sentences (mystery style)", "🔥 Hormozi Gold style", "🌌 Cyberpunk Neon", "⌨️ Typewriter (GOONINGGNG)"])
+caption_theme_label = col_s3.selectbox("🔤 Caption Theme", ["⌨️ Typewriter (GOONINGGNG)", "⚪ Minimalist White (reference style)", "🎬 Cinematic Sentences (mystery style)", "🔥 Hormozi Gold style", "🌌 Cyberpunk Neon"])
 caption_mapping = {
     "⚪ Minimalist White (reference style)": ("minimalist", "white"),
     "🎬 Cinematic Sentences (mystery style)": ("cinematic", "white"),
@@ -542,12 +542,12 @@ st.markdown("#### 🎨 Elite Visual Style System")
 st.caption("Dark animated background (never pure black) + stacked hook text + script beats + cards + arrows + SFX — the exact layer system used by top faceless channels.")
 col_v1, col_v2, col_v3 = st.columns(3)
 bg_style_label = col_v1.selectbox("Background Style", [
+    "🌑 Void Black (GOONINGGNG filter)",
     "🕸️ Elite Dark Grid",
     "🌠 Cosmic Gold (Cinematic)",
     "🌌 Aurora Mesh",
     "🎬 Red Pinstripe",
-    "✨ Glow Field",
-    "🌑 Void Black (GOONINGGNG filter)"
+    "✨ Glow Field"
 ])
 bg_style_map = {"🕸️ Elite Dark Grid": "grid", "🌠 Cosmic Gold (Cinematic)": "cosmic", "🌌 Aurora Mesh": "aurora", "🎬 Red Pinstripe": "pinstripe", "✨ Glow Field": "glow", "🌑 Void Black (GOONINGGNG filter)": "void"}
 bg_style_val = bg_style_map[bg_style_label]
@@ -564,10 +564,10 @@ accent_map = {"⚡ Yellow (Attention)": "yellow", "🏆 Gold (Mystery/Cinematic)
 accent_val = accent_map[accent_label]
 
 clip_mode_label = col_v3.selectbox("Clip Mode (your HD clips)", [
+    "Full screen",
     "⚡ Full Auto (AI clips primary)",
     "Blend over grid (stock)",
     "Inset rounded window",
-    "Full screen",
     "Text-first (no clips)"
 ])
 clip_mode_map = {"⚡ Full Auto (AI clips primary)": "auto", "Blend over grid (stock)": "blend", "Inset rounded window": "inset", "Full screen": "full", "Text-first (no clips)": "none"}
