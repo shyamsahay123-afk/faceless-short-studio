@@ -55,6 +55,43 @@ Every item below was fixed in code and verified by a LIVE full-pipeline render
    [DONE]            O4  auto-backup of shorts.db -> shorts_backup_YYYYMMDD.db
                         after every render, newest 3 kept (db_manager.backup_db).
    [DONE]            studio.log file logging (auto-truncates at ~1MB) + QC lines.
+
+STATUS: GOONINGGNG STYLE BUILD (round 2c) — 2026-08-29
+=============================================================================
+ Measured from ref_video3.mp4, then built as one coherent system:
+ [BUILT+TESTED] Cosmic pacing: pro_editor.build_cosmic_rhythm — one visual per
+   thought, 4-9s holds, cut on sentence gaps (unit test: 8 cuts @ 3.9-5.8s on a
+   40s script vs 27-29 cuts in cinematic mode).
+ [BROKEN->FIXED] The app's Video Pacing dropdown was a DEAD KNOB (cut_duration
+   was passed but never read by the engine). Now live: adrenaline/cinematic/
+   mindful actually scale cut lengths; cosmic = the new long-hold mode.
+ [BUILT] grade_frame_cosmic: sat crush to 12% + exposure to ~24/255 mean +
+   highlight soft-clip @160 + floor 3 (target = measured 22/255, 2% sat).
+ [BUILT] "void" background (near-black + faint starfield, no grid/glow).
+ [BUILT] Cosmic b-roll vocabulary: COSMIC_SEARCHES (30 concept->cosmos/time/
+   mind queries) + 12-query pool; void mode never searches people/cities.
+ [BUILT] Hook v2 "stack_contrast" (small gold line + HUGE white line, 4.5s
+   hold) — auto in void mode.
+ [BUILT] Typewriter caption theme (3-word fragments, white, cursor bar via
+   render_text_image(cursor=True)).
+ [BUILT] AI SFX DIRECTOR: rule-based pick from the 9 reference sounds —
+   keyword->sound on each scene open, riser+impact on the climax, sub-boom on
+   the outro; max 6/video; logged to studio.log (unit tested).
+ [BUILT] Outro card (last 4s) + DAILY CODE (B4, deterministic per date, stored
+   in db 'last_code', printed by daily.py) + 1-frame code flash at 70% (A3)
+   + sigil frame (B5, seeded position, 2s at 62%).
+ [BUILT] Watermark lock: bible 'watermark' handle -> top-right every frame.
+ [BUILT] Psychology Tricks system (spec: psychology_tricks.md): named secret
+   every video, rotating bait (open_question/hidden_detail/debate_split),
+   planted flaw every 10th, planted wrong answer every 15th. Unit tested
+   (incl. a real bug found+fixed: debate block clobbered the wrong-answer
+   line — now stacks).
+ [BUILT] Deep Narrator speed 0.98 -> 0.92 (the slow low delivery).
+ [BUILT] daily_settings.json pre-set to GOONINGGNG mode; daily.py passes
+   pacing + bible watermark + prints the daily code.
+ VERIFICATION: all components unit-tested; full end-to-end void/cosmic render
+   in progress at ship time (see render log / frames on completion).
+
  BONUS (2026-08-29): ref_video3.mp4 sound analysis complete — 9 real SFX
    isolated into sfx_library/ and wired into the Meme Sound dropdown.
 

@@ -212,3 +212,102 @@ Move your phone to another room before you start your morning routine.
     tags = f"{topic.lower().replace(' ', '')}, shorts, viral, psychology, {hook_category.lower().replace(' ', '')}"
     
     return title, full_script, tags, hook_category
+
+
+# ==============================================================================
+# THE TRICK DIRECTOR — psychology tricks system (spec: psychology_tricks.md)
+# "Indirectly signal that this channel holds secrets and power" +
+# comment-trigger mechanics (the planted-flaw principle, systematized).
+# Frequency rules matter more than the tricks: a trick used every video
+# dies by video 8. Rotation state is derived from the video id (deterministic).
+# ==============================================================================
+TRICK_GATEKEEPER = [
+    "99% of people will close this in the next ten seconds. That is the point.",
+    "If this found you, you have been feeling this for months.",
+    "Most people will skip the next part. Do not.",
+]
+TRICK_QUESTION_CTA = [
+    "Comment it: which one were you, day one or year one?",
+    "Sound off below: is this your morning or your night?",
+    "Tell me in the comments, what is your version of this?",
+]
+TRICK_EXCLUSIVE_CLOSE = [
+    "You did not find this video by accident.",
+    "Most people will never see this. Save it before it is gone.",
+]
+TRICK_DEBATE_BEAT = [
+    "Early risers are just anxious people with a routine.",
+    "Motivational quotes are for people who cannot build systems.",
+    "Multitasking is what happens when focus dies.",
+]
+NAMED_SECRET_POOL = [
+    "the dopamine tax", "micro-friction", "the twenty minute loop", "the attention debt",
+    "the willpower tax", "the friction trap", "the reward loop", "the focus leak",
+]
+# A1 planted flaw: near-miss spellings (must be *almost* right so the fix is easy)
+FLAW_SWAPS = {
+    "discipline": "discpline", "dopamine": "dompamine", "habit": "habbit",
+    "focus": "foucs", "secret": "secert", "brain": "bran", "success": "sucess",
+}
+# A5 planted wrong answer — nuance zone only (never something harmful)
+WRONG_ANSWER_LINE = "The prefrontal cortex makes all of your decisions."
+
+
+def choose_tricks(video_id):
+    """Deterministic trick selection per video id (rotation memory)."""
+    vid = int(video_id)
+    baits = ["open_question", "hidden_detail", "debate_split"]
+    return {
+        "named_secret": NAMED_SECRET_POOL[vid % len(NAMED_SECRET_POOL)],
+        "bait": baits[vid % len(baits)],
+        "flaw": (vid % 10 == 7),          # A1: one planted flaw per ~10 videos
+        "wrong_answer": (vid % 15 == 11),  # A5: one planted wrong answer per ~15
+    }
+
+
+def apply_tricks_to_script(script_text, video_id):
+    """Mutate the script with the chosen tricks. Returns (new_script, tricks_used).
+    Rules: named secret goes after the first content line; the flaw hits a
+    LATER line (never the hook); the CTA bait replaces the last content line;
+    the debate beat lands mid-value."""
+    t = choose_tricks(video_id)
+    lines = str(script_text).split("\n")
+    is_content = lambda l: bool(l.strip()) and not (l.strip().startswith("[") and l.strip().endswith("]"))
+    content_idx = 0
+    content_positions = [i for i, l in enumerate(lines) if is_content(l)]
+    new_lines = list(lines)
+
+    if content_positions:
+        # B2 — the named secret (the core trick): one concept, one name, every video
+        first_i = content_positions[0]
+        new_lines[first_i] = lines[first_i] + f" There is a name for this. It is called {t['named_secret']}."
+
+        # A1 — planted flaw on the 2nd content line (only if the word exists)
+        if t["flaw"] and len(content_positions) > 1:
+            i = content_positions[1]
+            low = lines[i].lower()
+            for good, bad in FLAW_SWAPS.items():
+                if good in low:
+                    new_lines[i] = lines[i].replace(good, bad) if good in lines[i] else lines[i].replace(good.capitalize(), bad)
+                    break
+
+        # A5 — planted wrong answer on the 3rd content line
+        if t["wrong_answer"] and len(content_positions) > 2:
+            i = content_positions[2]
+            new_lines[i] = lines[i] + " " + WRONG_ANSWER_LINE
+
+        # A4 — debate split: appended to the middle content line
+        # (append to new_lines so it stacks on top of any earlier mutation)
+        if t["bait"] == "debate_split" and len(content_positions) > 2:
+            i = content_positions[len(content_positions) // 2]
+            new_lines[i] = new_lines[i] + " " + TRICK_DEBATE_BEAT[int(video_id) % len(TRICK_DEBATE_BEAT)]
+
+        # A2/B6 — CTA baits replace the LAST content line
+        last_i = content_positions[-1]
+        if t["bait"] == "open_question":
+            new_lines[last_i] = TRICK_QUESTION_CTA[int(video_id) % len(TRICK_QUESTION_CTA)]
+        elif t["bait"] == "exclusive_close":
+            new_lines[last_i] = TRICK_EXCLUSIVE_CLOSE[int(video_id) % len(TRICK_EXCLUSIVE_CLOSE)]
+        # 'hidden_detail' bait = no script change (the 1-frame code flash does the work)
+
+    return "\n".join(new_lines), t

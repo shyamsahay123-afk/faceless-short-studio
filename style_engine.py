@@ -7,8 +7,10 @@
 import os
 import re
 import math
+import zlib
 import random
 import struct
+import datetime
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -197,8 +199,9 @@ def fit_font_size(text, font_size, max_width=660, outline_width=7):
 def render_text_image(text, font_size=80, color=(255, 255, 255),
                       outline_color=(0, 0, 0), outline_width=7,
                       panel=False, panel_color=(8, 10, 16, 210),
-                      pad=28, max_width=660):
-    """Render ONE line of text with heavy outline (auto-shrinks to fit, never wraps)."""
+                      pad=28, max_width=660, cursor=False):
+    """Render ONE line of text with heavy outline (auto-shrinks to fit, never wraps).
+    cursor=True appends a typewriter bar after the text (GOONINGGNG captions)."""
     text = text.strip()
     font_size = fit_font_size(text, font_size, max_width, outline_width)
     font = get_pil_font(font_size, bold=True, text=text)
@@ -213,6 +216,10 @@ def render_text_image(text, font_size=80, color=(255, 255, 255),
                             radius=22, fill=panel_color, outline=(255, 255, 255, 90), width=2)
     d.text((pad - off_x, pad - off_y),
            text, font=font, fill=color + (255,), stroke_width=outline_width, stroke_fill=outline_color + (255,))
+    if cursor:
+        # typewriter bar: a white block just past the last glyph
+        x0 = pad - off_x + tw + 3
+        d.rectangle([x0, pad - off_y + 2, x0 + 7, pad - off_y + th - 4], fill=color + (255,))
     return img
 
 
@@ -363,7 +370,15 @@ def make_style_background_clip(duration, style="grid", accent="yellow", fps=24):
     from moviepy import VideoClip
     accent_rgb = np.array(ACCENTS.get(accent, ACCENTS["yellow"]), dtype=np.float32)
 
-    if style == "pinstripe":
+    if style == "void":
+        # GOONINGGNG base: near-black void + faint static starfield, no grid,
+        # no glow. The B-roll (cosmic-graded) IS the visual.
+        base_img = Image.new("RGB", (WIDTH, HEIGHT), (4, 4, 7))
+        grid_arr = None
+        glow = np.zeros((HEIGHT, WIDTH, 3), dtype=np.float32)
+        glow2 = None
+        stars_arr = (_make_starfield() * 0.45).astype(np.float32)
+    elif style == "pinstripe":
         base_img = _make_grid_base(accent, "pinstripe")
         grid_arr = None
         glow = _radial_glow(WIDTH, HEIGHT, WIDTH // 2, int(HEIGHT * 0.95), 700, accent_rgb, 0.16)
@@ -734,36 +749,59 @@ def schedule_beats(beats, vtt_subs, duration):
 # ELITE TEXT LAYER — the full composition (hook + beats + cards + arrow + sfx)
 # ------------------------------------------------------------------------------
 def build_elite_text_layer(script_text, vtt_subs, duration, accent="yellow",
-                           sfx_dir="audio_clips", show_card=True):
+                           sfx_dir="audio_clips", show_card=True,
+                           hook_style="uniform", hook_hold=3.2):
     """
     Returns (video_clips, sfx_events)
     sfx_events: list of (wav_path, start_t, volume)
+    hook_style: 'uniform' (all lines same size, accent on last)
+                'stack_contrast' (GOONINGGNG: small accent line + HUGE white line)
     """
     from moviepy import ImageClip
     accent_rgb = ACCENTS.get(accent, ACCENTS["yellow"])
     clips = []
     sfx_events = []
 
-    # ---- 1. STACKED HOOK (0 - 3.2s), top third, staggered pop ----
-    # One size for all lines (reference style: uniform stacked lines, accent on last)
+    # ---- 1. STACKED HOOK (0 - hook_hold), top third, staggered pop ----
     hook_lines = parse_hook_lines(script_text)[:3]
-    hook_hold = 3.2
-    common_size = 84
-    for line in hook_lines:
-        common_size = min(common_size, fit_font_size(line.upper(), 84, 660, 7))
-    y_map = {1: [170], 2: [150, 290], 3: [130, 265, 400]}
-    y_positions = y_map.get(len(hook_lines), [130, 265, 400])
-    for i, line in enumerate(hook_lines):
-        try:
-            color = accent_rgb if i == len(hook_lines) - 1 else (255, 255, 255)
-            img = render_text_image(line.upper(), font_size=common_size,
-                                    color=color, outline_width=7)
-            start = 0.06 + i * 0.16
-            hold = hook_hold - start + 0.2
-            c = make_text_pop_clip(img, start, ("center", y_positions[i]), hold)
-            clips.append(c)
-        except Exception as e:
-            print(f"[StyleEngine] hook line failed: {e}")
+    if hook_style == "stack_contrast" and hook_lines:
+        # GOONINGGNG hook (measured from ref_video3):
+        # line 1 SMALL in the accent color, remaining lines HUGE in white.
+        # "WHAT'S THE" (gold ~44) / "MOST" (white ~108)
+        y_pos_sc = {1: [300], 2: [210, 350], 3: [170, 300, 445]}
+        for i, line in enumerate(hook_lines):
+            try:
+                if i == 0:
+                    size, color = 44, accent_rgb   # kicker line: small gold
+                else:
+                    size = fit_font_size(line.upper(), 108, 660, 7)
+                    color = (255, 255, 255)        # big line(s): white (ref: "MOST")
+                img = render_text_image(line.upper(), font_size=size,
+                                        color=color, outline_width=7)
+                start = 0.06 + i * 0.18
+                hold = hook_hold - start + 0.3
+                c = make_text_pop_clip(img, start, ("center", y_pos_sc.get(len(hook_lines), [300])[i]), hold)
+                clips.append(c)
+            except Exception as e:
+                print(f"[StyleEngine] hook line failed: {e}")
+    else:
+        # uniform stacked lines (original elite style), accent on last
+        common_size = 84
+        for line in hook_lines:
+            common_size = min(common_size, fit_font_size(line.upper(), 84, 660, 7))
+        y_map = {1: [170], 2: [150, 290], 3: [130, 265, 400]}
+        y_positions = y_map.get(len(hook_lines), [130, 265, 400])
+        for i, line in enumerate(hook_lines):
+            try:
+                color = accent_rgb if i == len(hook_lines) - 1 else (255, 255, 255)
+                img = render_text_image(line.upper(), font_size=common_size,
+                                        color=color, outline_width=7)
+                start = 0.06 + i * 0.16
+                hold = hook_hold - start + 0.2
+                c = make_text_pop_clip(img, start, ("center", y_positions[i]), hold)
+                clips.append(c)
+            except Exception as e:
+                print(f"[StyleEngine] hook line failed: {e}")
     # v2: soft hook hit (the old 0.5 volume startle was a skip trigger)
     sfx_events.append(("__hit__", 0.42, 0.32))
 
@@ -893,3 +931,95 @@ def grade_clip_dark(arr_factor=0.62):
         a = grade_frame(frame).astype(np.float32) * arr_factor
         return np.clip(a, 6, 255).astype("uint8")
     return fn
+
+
+def daily_code(date_str=None):
+    """B4 — THE DAILY CODE (the power ritual). Deterministic from the date:
+    the same code all day, new code tomorrow. 'CODE 4-2-1' style."""
+    d = date_str or datetime.date.today().strftime("%Y%m%d")
+    h = zlib.crc32(f"faceless-code-{d}".encode())
+    return f"{h % 10}-{(h // 10) % 10}-{(h // 100) % 10}"
+
+
+def make_outro_card(handle, code, accent="yellow", w=720, h=1280):
+    """GOONINGGNG outro (the last ~4s): near-black card, @handle centered,
+    'the next code is dropping' line, and CODE X-Y-Z bottom-left (B4 ritual)."""
+    img = Image.new("RGB", (w, h), (6, 6, 9))
+    d = ImageDraw.Draw(img)
+    rng = random.Random(99)
+    for _ in range(70):
+        x, y = rng.randint(0, w), rng.randint(0, h)
+        v = rng.randint(22, 64)
+        d.point((x, y), fill=(v, v, min(255, v + 8)))
+    accent_rgb = ACCENTS.get(accent, ACCENTS["yellow"])
+    handle_txt = str(handle or "").strip() or "@yourchannel"
+    if not handle_txt.startswith("@"):
+        handle_txt = "@" + handle_txt
+    f = get_pil_font(58, bold=True, text=handle_txt)
+    tw, th, ox, oy = _measure_text(handle_txt, f, 3)
+    d.text(((w - tw) // 2 - ox, h // 2 - 110 - oy), handle_txt, font=f,
+           fill=(235, 238, 245), stroke_width=3, stroke_fill=(0, 0, 0))
+    f2 = get_pil_font(28, bold=False, text="x")
+    sub = "THE NEXT CODE IS DROPPING"
+    tw2, th2, ox2, oy2 = _measure_text(sub, f2, 0)
+    d.text(((w - tw2) // 2 - ox2, h // 2 + 30 - oy2), sub, font=f2, fill=(118, 124, 136))
+    f3 = get_pil_font(34, bold=True, text=str(code))
+    d.text((48, h - 150), f"CODE {code}", font=f3, fill=tuple(accent_rgb),
+           stroke_width=2, stroke_fill=(0, 0, 0))
+    return img
+
+
+def make_sigil_overlay(duration, seed=1):
+    """B5 — the insider mark: a small 12-point star shown for 2s at ~62% of the
+    video, position seeded per video. Never announced ('only the real ones
+    notice'). Pairs with A3 (the 1-frame code flash)."""
+    from moviepy import ImageClip
+    rng = random.Random(seed)
+    size = 46
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cx = cy = size // 2
+    pts = []
+    for i in range(24):
+        r = 22 if i % 2 == 0 else 10
+        a = math.pi * i / 12 - math.pi / 2
+        pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+    d.polygon(pts, fill=(255, 215, 0, 140))
+    clip = ImageClip(np.array(img), transparent=True)
+    t0 = max(0.5, duration * 0.62)
+    pos = (rng.randint(60, WIDTH - 100), rng.randint(90, 320))
+    return clip.with_start(t0).with_duration(2.0).with_position(pos)
+
+
+def make_watermark_clip(handle, duration):
+    """Watermark lock: @handle top-right, every frame, small + soft. The
+    channel's brand signature (GOONINGGNG runs its IG handle on every frame)."""
+    from moviepy import ImageClip
+    txt = str(handle or "").strip()
+    if not txt:
+        return None
+    if not txt.startswith("@"):
+        txt = "@" + txt
+    img = render_text_image(txt, font_size=30, color=(235, 238, 245), outline_width=2, pad=6)
+    a = np.array(img).astype(np.float32)
+    a[..., 3] *= 0.7
+    clip = ImageClip(a.astype(np.uint8), transparent=True)
+    return clip.with_duration(duration).with_position((WIDTH - img.width - 34, 46))
+
+
+def grade_frame_cosmic(arr):
+    """THE GOONINGGNG FILTER — measured from ref_video3 (31 frames):
+       mean luminance 22/255, saturation 2.0%, 66% of pixels near-black.
+       Full-color footage comes through as dark graphite + one faint hue.
+       1) crush saturation to 12%  2) exposure-normalize to ~24 mean
+       3) soft-clip highlights at ~160 (the ref's white nebula cores)
+       4) luminance floor 3 (never true black — the no-dead-frame rule)"""
+    a = arr.astype(np.float32)
+    luma = 0.2126 * a[..., 0] + 0.7152 * a[..., 1] + 0.0722 * a[..., 2]
+    a = 0.12 * a + 0.88 * luma[..., None]
+    cur = float(a.mean())
+    if cur > 1.0:
+        a = a * (24.0 / cur)
+    a = np.where(a > 160.0, 160.0 + (a - 160.0) * 0.25, a)
+    a = np.clip(a, 3.0, 255)
+    return a.astype("uint8")

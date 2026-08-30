@@ -474,24 +474,27 @@ voice_code = {"Deep Narrator Male": "en-US-ChristopherNeural", "Energetic Male":
               "🇮 Hindi Male (Madhur)": "hi-IN-MadhurNeural",
               "🇮🇳 Hindi Female (Swara)": "hi-IN-SwaraNeural"}[ai_voice_label]
 
-pacing_label = col_s2.selectbox("⏱️ Video Pacing", [
+pacing_label = col_s2.selectbox("⏱️ Video Pacing (now LIVE)", [
     "⚡ Adrenaline ADHD (1.3s cuts)",
     "🎬 Cinematic (2.0s cuts)",
-    "🌌 Mindful Slower (3.2s cuts)"
+    "🌌 Mindful Slower (3.2s cuts)",
+    "🌑 Deep Cosmic (4-9s holds — GOONINGGNG)"
 ])
 pacing_mapping = {
-    "⚡ Adrenaline ADHD (1.3s cuts)": 1.3,
-    "🎬 Cinematic (2.0s cuts)": 2.0,
-    "🌌 Mindful Slower (3.2s cuts)": 3.2
+    "⚡ Adrenaline ADHD (1.3s cuts)": ("adrenaline", 1.3),
+    "🎬 Cinematic (2.0s cuts)": ("cinematic", 2.0),
+    "🌌 Mindful Slower (3.2s cuts)": ("mindful", 3.2),
+    "🌑 Deep Cosmic (4-9s holds — GOONINGGNG)": ("cosmic", 6.0)
 }
-cut_duration_val = pacing_mapping[pacing_label]
+pacing_code, cut_duration_val = pacing_mapping[pacing_label]
 
-caption_theme_label = col_s3.selectbox("🔤 Caption Theme", ["⚪ Minimalist White (reference style)", "🎬 Cinematic Sentences (mystery style)", "🔥 Hormozi Gold style", "🌌 Cyberpunk Neon"])
+caption_theme_label = col_s3.selectbox("🔤 Caption Theme", ["⚪ Minimalist White (reference style)", "🎬 Cinematic Sentences (mystery style)", "🔥 Hormozi Gold style", "🌌 Cyberpunk Neon", "⌨️ Typewriter (GOONINGGNG)"])
 caption_mapping = {
     "⚪ Minimalist White (reference style)": ("minimalist", "white"),
     "🎬 Cinematic Sentences (mystery style)": ("cinematic", "white"),
     "🔥 Hormozi Gold style": ("hormozi", "yellow"),
-    "🌌 Cyberpunk Neon": ("cyberpunk", "cyan")
+    "🌌 Cyberpunk Neon": ("cyberpunk", "cyan"),
+    "⌨️ Typewriter (GOONINGGNG)": ("typewriter", "white")
 }
 caption_style_code, caption_color = caption_mapping[caption_theme_label]
 
@@ -543,9 +546,10 @@ bg_style_label = col_v1.selectbox("Background Style", [
     "🌠 Cosmic Gold (Cinematic)",
     "🌌 Aurora Mesh",
     "🎬 Red Pinstripe",
-    "✨ Glow Field"
+    "✨ Glow Field",
+    "🌑 Void Black (GOONINGGNG filter)"
 ])
-bg_style_map = {"🕸️ Elite Dark Grid": "grid", "🌠 Cosmic Gold (Cinematic)": "cosmic", "🌌 Aurora Mesh": "aurora", "🎬 Red Pinstripe": "pinstripe", "✨ Glow Field": "glow"}
+bg_style_map = {"🕸️ Elite Dark Grid": "grid", "🌠 Cosmic Gold (Cinematic)": "cosmic", "🌌 Aurora Mesh": "aurora", "🎬 Red Pinstripe": "pinstripe", "✨ Glow Field": "glow", "🌑 Void Black (GOONINGGNG filter)": "void"}
 bg_style_val = bg_style_map[bg_style_label]
 
 accent_label = col_v2.selectbox("Accent Color (one system, every video)", [
@@ -574,6 +578,10 @@ show_progress_bar = st.toggle("📊 Show progress bar (keep OFF — YouTube UI c
 # PIECE 9 — SFX KNOB (one slider controls the whole sound-design layer)
 sfx_level = st.slider("🔊 SFX Level (whole sound layer: hits, whooshes, ticks)", 0, 100, 70) / 100.0
 
+# PSYCHOLOGY TRICKS — the trick director (named secret + comment bait, auto-rotated)
+tricks_on = st.toggle("🧠 Psychology Tricks (named secret + comment bait, auto-rotated)", value=True,
+                      help="Every video gets one named secret; a comment bait rotates (open question / hidden detail / debate split); one planted flaw per ~10 videos. Spec: psychology_tricks.md")
+
 # PIECE 4 — CHARACTER BIBLE (the channel's locked visual identity)
 st.markdown("#### 👤 Character Bible (locked visual identity)")
 st.caption("One description + one fixed seed = the SAME look in every video. Set it once — video #50 looks like video #1.")
@@ -583,8 +591,12 @@ bib_enabled = col_b1.toggle("Character bible ON", value=bible.get("enabled", Tru
 bib_name = col_b1.text_input("Character name", value=bible.get("name", "The Narrator"))
 bib_desc = col_b2.text_area("Character description (locked in every AI image)", value=bible.get("description", ""))
 bib_seed = col_b3.number_input("Seed (locked)", min_value=1, max_value=9999999, value=int(bible.get("seed", 421337)))
+# Watermark lock (GOONINGGNG runs its IG handle on every frame) — used by the
+# Void Black mode's outro card + top-right watermark
+bib_handle = st.text_input("Watermark handle (top-right, every frame — e.g. @yourchannel)", value=bible.get("watermark", ""))
 if st.button("💾 Save Character Bible", use_container_width=False):
     video.save_character_bible({"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
+                                "watermark": bib_handle,
                                 "style_suffix": bible.get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")})
     st.success("Bible saved — every future AI image uses this locked identity.")
 
@@ -682,6 +694,7 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 progress_callback=render_progress,
                 caption_style=caption_style_code,
                 cut_duration=cut_duration_val,
+                pacing=pacing_code,
                 b_roll_source=b_roll_source_val,
                 custom_scenarios=scenarios_input,
                 meme_sfx_name=meme_sfx_label,
@@ -692,7 +705,9 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 voice_preset=ai_voice_label,
                 sfx_level=sfx_level,
                 character_bible={"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
-                                 "style_suffix": video.load_character_bible().get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")}
+                                 "watermark": bib_handle,
+                                 "style_suffix": video.load_character_bible().get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")},
+                tricks=tricks_on,
             )
             
             db.update_short_video(short_id, v_path, a_path, vtt_path, status='created')
@@ -759,6 +774,7 @@ with st.expander("📦 Batch Mode — generate a week of videos in one run (asse
                     progress_callback=batch_progress,
                     caption_style=caption_style_code,
                     cut_duration=cut_duration_val,
+                pacing=pacing_code,
                     b_roll_source=b_roll_source_val,
                     custom_scenarios=[],
                     meme_sfx_name="None",
@@ -769,7 +785,9 @@ with st.expander("📦 Batch Mode — generate a week of videos in one run (asse
                     voice_preset=ai_voice_label,
                     sfx_level=sfx_level,
                     character_bible={"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
-                                     "style_suffix": video.load_character_bible().get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")})
+                                     "watermark": bib_handle,
+                                 "style_suffix": video.load_character_bible().get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")},
+                                     tricks=tricks_on)
                 db.update_short_video(bid, bv, ba, bvtt, status='created')
                 st.session_state['last_render_srt'] = bvtt  # enables Retention Re-Cut
                 st.session_state['last_render_video_name'] = os.path.basename(bv)

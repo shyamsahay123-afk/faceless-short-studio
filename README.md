@@ -53,6 +53,33 @@ Every video gets the same 0.5s stinger at 0.0s, same volume. Pro channels are
 recognized by sound before the frame resolves — this is the ear's version of the
 character bible. Deterministic: identical on every machine, every day.
 
+## 🌑 GOONINGGNG MODE (the measured style of your reference channel)
+
+One combination of settings reproduces the @GOONINGGNG look — every value below
+was measured from `ref_video3.mp4`, not guessed:
+
+| Setting | Choice | Why (measured) |
+|---|---|---|
+| Background Style | **Void Black** | ref: 66% of every frame is near-black |
+| Pacing | **Deep Cosmic** | ref: 8-12 visuals per 65s, held 5-15s (we measured 8 cuts @ 4-6s) |
+| Clip Mode | Full screen | ref shows full-frame cosmic footage, no windows |
+| Caption Theme | **Typewriter** | ref: white 3-word fragments with a cursor bar |
+| Hook | auto stack-contrast | ref: small gold line + HUGE white line |
+| Grade | auto cosmic | ref: mean luminance 22/255, saturation 2% |
+| B-roll | auto cosmos vocabulary | ref: only cosmos + clocks + brains, never people/cities |
+| Sound | **AI SFX Director auto-picks** | ref: whoosh on transitions, ticks on clocks, riser→impact on the climax, sub-boom on the outro (max 6/video) |
+| Outro | auto card + **daily code** | ref: logo outro with sub-bass boom |
+| Watermark | bible `watermark` handle | ref: IG handle on every frame |
+| Voice | Deep Narrator @ 0.92 | ref: slow, low delivery (median 132Hz, crisp) |
+
+Plus the **Psychology Tricks** toggle (ON by default): one named secret per video,
+rotating comment bait, a planted flaw every ~10th video — full spec in
+`psychology_tricks.md`. The SFX director + tricks picks are logged in `studio.log`.
+
+`daily_settings.json` ships pre-set to GOONINGGNG mode (void + cosmic +
+typewriter). Set your `watermark` handle there (or in the app) and the autopilot
+produces the style unattended.
+
 ## 🎧 4b. Reference SFX Pack (the sounds from your viral reference short)
 
 `ref_video3.mp4` was dissected: 9 real SFX were detected, isolated and saved in

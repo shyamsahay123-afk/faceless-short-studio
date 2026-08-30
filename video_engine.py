@@ -542,6 +542,55 @@ METAPHOR_EXPANSIONS = {
 # merge the metaphor brain into the concept expander
 CONCEPT_EXPANSIONS.update(METAPHOR_EXPANSIONS)
 
+# --- COSMIC B-ROLL VOCABULARY (GOONINGGNG mode) ---
+# The reference channel's entire visual world = Cosmos + Time + Mind, dark-graded.
+# In void mode the metaphor engine is overridden by this map: no cities, no
+# people, no stock "man walking" — only deep-space, clocks, and brains.
+COSMIC_SEARCHES = {
+    "brain": "dark galaxy nebula space",
+    "mind": "milky way stars night sky dark",
+    "neuro": "brain neurons dark macro",
+    "dopamine": "neurons firing dark macro",
+    "time": "antique clock dark macro",
+    "clock": "antique clock face dark",
+    "habit": "antique clock hands dark macro",
+    "fear": "dark red nebula space",
+    "anxiety": "dark nebula space storm",
+    "trap": "dark nebula space vortex",
+    "stuck": "dark space nebula slow",
+    "escape": "comet stars night sky",
+    "freedom": "stars night sky wide",
+    "focus": "single star night sky dark",
+    "attention": "shooting star night sky",
+    "decision": "two stars night sky dark",
+    "willpower": "clock mechanism dark macro",
+    "discipline": "clock hands dark macro",
+    "overthinking": "spiral galaxy dark",
+    "sleep": "moon stars night sky dark",
+    "dream": "nebula purple dark space",
+    "truth": "moon dark sky stars",
+    "secret": "dark nebula space mystery",
+    "power": "eclipse dark space",
+    "energy": "nebula bright core space",
+    "death": "dark space stars void",
+    "life": "nebula stars birth space",
+    "change": "galaxy swirl dark space",
+    "danger": "dark red nebula space",
+    "calm": "still stars night sky",
+    "chaos": "nebula swirl dark space",
+    "money": "dark space nebula gold",
+    "love": "two stars binary night sky",
+    "heart": "red nebula dark space",
+    "soul": "nebula glow dark space",
+    "habit_": "clock dark macro",
+}
+COSMIC_POOL = [
+    "dark nebula space slow", "galaxy stars night sky", "antique clock dark",
+    "brain neurons dark", "comet star field night", "milky way stars dark",
+    "eclipse dark space", "moon stars night sky", "spiral galaxy dark",
+    "clock mechanism macro dark", "ink in water dark", "dark ocean wave night",
+]
+
 # --- VTT-SYNCED B-ROLL SELECTION (pro fix: the clip must match the word being
 # SPOKEN at that moment — never a rotating list from the whole script) ---
 GENERIC_WORDS = {
@@ -620,8 +669,15 @@ def spoken_word_in_window(start_t, end_t, vtt_subs, used_words):
     return None
 
 
-def expand_keyword_to_concept(word):
+def expand_keyword_to_concept(word, cosmic=False):
     word_clean = str(word).lower().strip()
+    if cosmic:
+        if word_clean in COSMIC_SEARCHES:
+            return COSMIC_SEARCHES[word_clean]
+        for k, v in COSMIC_SEARCHES.items():
+            if len(k) > 3 and k in word_clean:
+                return v
+        return None  # no cosmic match -> caller draws from the cosmic pool
     return CONCEPT_EXPANSIONS.get(word_clean, f"aesthetic {word_clean}")
 
 # --- KEYWORD EXTRACTOR FOR AUTOMATED B-ROLL SEARCH ---
@@ -766,9 +822,13 @@ def download_pixabay_b_roll(query, api_key):
     return None
 
 # --- PEXELS/PIXABAY AUTOMATED BACKUP KEYWORD DOWNLOADER WITH COLOR TONE MATCHING ---
-def download_pexels_b_roll_with_fallback(query, api_key, source="pexels", color_tone="aesthetic"):
+def download_pexels_b_roll_with_fallback(query, api_key, source="pexels", color_tone="aesthetic", cosmic=False):
     clean_query = f"{query} {color_tone}" if color_tone else query
-    expanded = expand_keyword_to_concept(clean_query)
+    expanded = expand_keyword_to_concept(clean_query, cosmic=cosmic)
+    if cosmic and expanded is None:
+        # no cosmos match for this word: deterministic draw from the cosmic pool
+        import zlib
+        expanded = COSMIC_POOL[zlib.crc32(str(query).encode("utf-8")) % len(COSMIC_POOL)]
     
     clip = None
     if source == "pixabay":
@@ -1576,7 +1636,7 @@ VOICE_PRESETS = {
     "Deep Narrator Male": {
         "voice_id": "ErXwobaYiN019PkySvjV",          # Adam
         "settings": {"stability": 0.35, "similarity_boost": 0.78, "style": 0.20, "speaker_boost": True},
-        "speed": 0.98,
+        "speed": 0.92,   # GOONINGGNG delivery: slow + low = the "deep voice that came"
     },
     "Energetic Male": {
         "voice_id": "pNInz6obpgDQGcFmaJgB",          # Antoni
@@ -1862,7 +1922,7 @@ def _subject_anchor_x1(clip, w, h, new_w):
         return (w - new_w) // 2
 
 
-def make_vertical_clip(clip, target_w=720, target_h=1280, dark_blend=False, exposure_gain=1.0):
+def make_vertical_clip(clip, target_w=720, target_h=1280, dark_blend=False, exposure_gain=1.0, cosmic=False):
     w, h = clip.size
     target_aspect = target_w / target_h
     current_aspect = w / h
@@ -1876,6 +1936,14 @@ def make_vertical_clip(clip, target_w=720, target_h=1280, dark_blend=False, expo
         cropped_clip = clip.cropped(x1=0, y1=(h - new_h) // 2, width=w, height=new_h)
         
     resized_clip = cropped_clip.resized(width=target_w, height=target_h)
+
+    # --- COSMIC GRADE (GOONINGGNG filter: sat crush + 22/255 brightness
+    #     ceiling — any footage comes through as the same dark graphite) ---
+    if cosmic and se is not None:
+        try:
+            return se.clip_fl(resized_clip, lambda gf, t: se.grade_frame_cosmic(gf(t)))
+        except Exception as e:
+            print(f"[Grade] cosmic grade failed ({e}); using premium grade")
 
     # --- PREMIUM DARK GRADE (cross-version safe) + PRO PASS 5 primary
     #     correction (exposure match so every clip sits at the same level) ---
@@ -2061,8 +2129,14 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
     
     is_word_pop = "hormozi" in caption_theme or "cyberpunk" in caption_theme or "word_pop" in caption_theme
     is_cinematic = "cinematic" in caption_theme
+    is_typewriter = "typewriter" in caption_theme
 
-    if is_cinematic:
+    if is_typewriter:
+        # GOONINGGNG captions: 3-word fragments, small white, no bounce,
+        # no color-coding, with a typewriter cursor bar
+        display_subs = split_subtitles_into_words(subtitles, words_per_clip=3)
+        actual_font_size = int(font_size * 0.72)
+    elif is_cinematic:
         # Reference #3 style: sentence-level phrases (3 words), no spring bounce,
         # calm gold/white — the narration stays the star
         display_subs = split_subtitles_into_words(subtitles, words_per_clip=3)
@@ -2130,8 +2204,10 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
         stroke_color = "black"
         stroke_width = 3   # PRO STANDARD: 2-4px outline (piece 3 caption lock)
         is_power = False
-        
-        if "cyberpunk" in caption_theme:
+
+        if is_typewriter:
+            word_color, stroke_width = "white", 2
+        elif "cyberpunk" in caption_theme:
             word_color = "#00FFFF"
             if re.search(r"\d", txt) or "%" in txt:
                 word_color, word_size, is_power = accent_hex, int(actual_font_size * 1.15), True
@@ -2177,6 +2253,7 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
                     color=tuple(c),
                     outline_color=(0, 0, 0),
                     outline_width=stroke_width + 1,
+                    cursor=is_typewriter,
                 )
                 txt_clip = ImageClip(np.array(cap_img), transparent=True)
             except Exception as cap_e:
@@ -2195,7 +2272,8 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
             )
 
         try:
-            if "minimalist" not in caption_theme and "cinematic" not in caption_theme:
+            if ("minimalist" not in caption_theme and "cinematic" not in caption_theme
+                    and not is_typewriter):
                 # Upgraded: High-fidelity organic spring bounce scales from 0.85 up to 1.12, then settles smoothly to 1.0!
                 bouncy_txt_clip = txt_clip.resized(lambda t: (0.85 + 0.27 * np.sin(t * (np.pi / 0.15))) if t < 0.15 else 1.0)
             else:
@@ -2380,6 +2458,60 @@ def run_qc_report(video_path, srt_path=None):
 
 
 # ==============================================================================
+# AI SFX DIRECTOR — "the AI chooses which sound gets added".
+# Rules learned from ref_video3: whoosh on transitions, ticks on time words,
+# flare on reveal words, riser before the climax, impact ON the climax line,
+# sub-boom on the outro. Cosmic style is sparse: max 6 per video.
+# ==============================================================================
+SFX_DIRECTOR_KEYWORDS = {
+    "tick_tock": ["clock", "time", "second", "minute", "hour", "wait", "slow", "tick", "delay"],
+    "warp_whoosh": ["through", "into", "fast", "speed", "run", "chase", "warp", "beyond", "quick"],
+    "comet_whoosh": ["escape", "break", "free", "away", "leave", "jump", "out"],
+    "energy_flare": ["scientist", "study", "brain", "neuron", "secret", "reveal", "truth", "scientists"],
+}
+
+
+def direct_sfx(scene_boundaries, vtt_subs, duration, climax_t=None):
+    """Return up to 6 (sfx_name, t, vol) events for this video's structure."""
+    if not scene_boundaries or duration < 8:
+        return []
+    events = []
+
+    def words_of(i):
+        a, b = scene_boundaries[i]
+        return " ".join(s["text"].lower() for s in vtt_subs if a <= s["start"] < b)
+
+    # transitions: each inner cut checks the words of the scene it OPENS
+    for i in range(1, len(scene_boundaries)):
+        t = scene_boundaries[i][0]
+        wtext = words_of(i)
+        for sfx, kws in SFX_DIRECTOR_KEYWORDS.items():
+            if any(k in wtext for k in kws):
+                events.append((sfx, t, 0.30))
+                break
+    # climax: riser 1.8s before, impact ON the reveal
+    if climax_t and 3 < climax_t < duration - 3:
+        events.append(("riser", max(0.5, climax_t - 1.8), 0.32))
+        events.append(("climax_impact", climax_t, 0.38))
+    # outro: the sub-bass boom lands as the outro card takes over
+    events.append(("sub_boom", max(0.5, duration - 4.2), 0.5))
+
+    # strongest first, dedupe close-in-time, cap 6
+    events.sort(key=lambda e: -e[2])
+    seen, out = set(), []
+    for name, t, v in events:
+        key = round(t / 0.8)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((name, t, v))
+        if len(out) >= 6:
+            break
+    out.sort(key=lambda e: e[1])
+    return out
+
+
+# ==============================================================================
 # STUDIO LOG — persistent file log (studio.log next to the app).
 # Prints go to the console; the log survives and makes debugging easy after the
 # fact ("why did that render use pixabay?" — check the log).
@@ -2419,6 +2551,18 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     
     if progress_cb: progress_cb(0.05, "Cleaning script...")
     spoken_text = clean_script_for_speech(script_text)
+
+    # PSYCHOLOGY TRICKS — the trick director alters the script BEFORE TTS:
+    # one named secret + rotating comment bait + scheduled planted flaw.
+    # Full system spec: psychology_tricks.md
+    if kwargs.get("tricks", True):
+        try:
+            from script_engine import apply_tricks_to_script
+            script_text, _tricks_used = apply_tricks_to_script(script_text, short_id)
+            spoken_text = clean_script_for_speech(script_text)
+            log(f"TRICKS id={short_id}: {_tricks_used}")
+        except Exception as e:
+            print(f"[Tricks] skipped: {e}")
     
     eleven_key = kwargs.get("elevenlabs_api_key", None)
     
@@ -2492,6 +2636,8 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     style_bg = str(kwargs.get("style_bg", "grid")).lower()
     style_accent = str(kwargs.get("style_accent", "yellow")).lower()
     clip_mode = str(kwargs.get("clip_mode", "blend")).lower()
+    # GOONINGGNG mode: "void" background auto-brings the cosmic grade on all b-roll
+    cosmic = (style_bg == "void")
     accent_rgb = (255, 215, 0)
     if se is not None:
         accent_rgb = se.ACCENTS.get(style_accent, (255, 215, 0))
@@ -2519,7 +2665,9 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     if se is not None:
         try:
             elite_clips, elite_sfx = se.build_elite_text_layer(
-                script_text, vtt_subs, duration, accent=style_accent, sfx_dir=AUDIO_DIR)
+                script_text, vtt_subs, duration, accent=style_accent, sfx_dir=AUDIO_DIR,
+                hook_style=("stack_contrast" if cosmic else "uniform"),
+                hook_hold=(4.5 if cosmic else 3.2))
         except Exception as e:
             print(f"[StyleEngine] Elite text layer failed: {e}")
     arc_peak_t = next((t for k, t, v in elite_sfx if k == "__ding__"), None)
@@ -2527,11 +2675,15 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     # PASS 2 — RHYTHM: tension-based shot lengths, cut-on-word, 2.5s hard
     # cap, 2-fast-then-slow breathing (replaces random pacing)
     if progress_cb: progress_cb(0.29, "PRO EDITOR: paper cut (beat map) + pro rhythm (tension cuts on words)...")
+    # PACING MODE — the Video Pacing dropdown is now LIVE (was a dead knob):
+    #   adrenaline = fast ADHD cuts · cinematic = default · mindful = slower
+    #   cosmic = GOONINGGNG grammar: one visual per thought, 4-9s holds
+    pacing = str(kwargs.get("pacing", "cinematic")).lower()
     scene_boundaries = None
     if pe is not None:
         try:
             beat_map = pe.build_beat_map(duration, climax_t=arc_peak_t)
-            scene_boundaries = pe.build_scene_rhythm(beat_map, vtt_subs, duration)
+            scene_boundaries = pe.build_scene_rhythm(beat_map, vtt_subs, duration, pacing=pacing)
         except Exception as e:
             print(f"[ProEditor] rhythm failed ({e}); falling back to fixed pacing")
     if scene_boundaries is None or not scene_boundaries:
@@ -2694,7 +2846,7 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                 except Exception:
                     exp_gain = 1.0
             # v2: brighter blend (0.82) + lighter dark grade — clips must stay clearly visible
-            scaled_sub = make_vertical_clip(sub_v, dark_blend=dark, exposure_gain=exp_gain)
+            scaled_sub = make_vertical_clip(sub_v, dark_blend=dark, exposure_gain=exp_gain, cosmic=cosmic)
             # Zoom punch: subtle 6% push-in over the cut (motion = retention)
             try:
                 if clip_dur > 0.5:
@@ -2818,7 +2970,9 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
 
                 if search_word:
                     if progress_cb: progress_cb(0.35 + idx * progress_cb_step_weight, f"Downloading clip for SPOKEN word '{search_word.upper()}'...")
-                    downloaded_file = download_pexels_b_roll_with_fallback(search_word, active_key, source=target_source, color_tone=color_tone)
+                    downloaded_file = download_pexels_b_roll_with_fallback(
+                        search_word, active_key, source=target_source,
+                        color_tone=("dark space" if cosmic else color_tone), cosmic=cosmic)
                     if downloaded_file and os.path.exists(downloaded_file) and downloaded_file in used_clip_files:
                         # same clip already used → dedupe: reuse previous instead
                         downloaded_file = None
@@ -2994,7 +3148,58 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
 
     # NEW: Elite text layer — hook / beats / cards / arrows (content-driven retention)
     extra_clips.extend(elite_clips)
-        
+
+    # ====================================================================
+    # GOONINGGNG MODE (void background) — the signature layers:
+    # AI SFX director, outro card + daily code, watermark lock,
+    # sigil frame (B5), 1-frame code flash (A3 hidden detail)
+    # ====================================================================
+    if cosmic:
+        # 1) AI SFX DIRECTOR — picks the sounds for this video's structure
+        try:
+            _director_events = direct_sfx(scene_boundaries, vtt_subs, duration, climax_t=arc_peak_t)
+            for _sfx_name, _sfx_t, _sfx_vol in _director_events:
+                _p = download_free_meme_sfx(_sfx_name)
+                if _p:
+                    transition_audio_clips.append(make_safe_sfx_clip(_p, _sfx_t, duration, _sfx_vol * sfx_level))
+            if _director_events:
+                log(f"SFX DIRECTOR id={short_id}: {[(n, round(t, 1)) for n, t, _ in _director_events]}")
+        except Exception as e:
+            print(f"[SFX] director failed: {e}")
+        # 2) OUTRO CARD (final 4s) + DAILY CODE (B4) + 1-frame code flash (A3)
+        try:
+            _handle = (channel_bible or {}).get("watermark", "")
+            _code = se.daily_code() if se else "0-0-0"
+            _card = se.make_outro_card(_handle, _code, accent=style_accent)
+            extra_clips.append(ImageClip(np.array(_card)).with_start(duration - 4.0).with_duration(4.0))
+            try:
+                db_settings.set_setting("last_code", _code)
+            except Exception:
+                pass
+            log(f"OUTRO CODE {time.strftime('%Y-%m-%d')}: {_code}")
+            try:
+                _fl = se.render_text_image(_code, font_size=26, color=(255, 215, 0), outline_width=0, pad=4)
+                _fa = np.array(_fl).astype(np.float32)
+                _fa[..., 3] *= 0.5
+                extra_clips.append(ImageClip(_fa.astype(np.uint8), transparent=True)
+                                   .with_start(duration * 0.70).with_duration(1.0 / 24.0)
+                                   .with_position(("center", int(se.HEIGHT * 0.42))))
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[StyleEngine] outro card failed: {e}")
+        # 3) SIGIL frame (B5 — the insider mark)
+        try:
+            extra_clips.append(se.make_sigil_overlay(duration, seed=int(short_id)))
+        except Exception as e:
+            print(f"[StyleEngine] sigil failed: {e}")
+        # 4) WATERMARK lock (top-right, every frame)
+        try:
+            _wm = se.make_watermark_clip((channel_bible or {}).get("watermark", ""), duration)
+            if _wm is not None:
+                extra_clips.append(_wm)
+        except Exception as e:
+            print(f"[StyleEngine] watermark failed: {e}")
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
     # --- COMBINED ROBUST WINDOWS COLORSPACE & CODEC FIXED FORMAT + SPEED PRESET SPEEDUP ---
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(

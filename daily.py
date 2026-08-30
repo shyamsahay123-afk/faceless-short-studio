@@ -157,6 +157,9 @@ def main():
 
     # 4) RENDER (locked channel identity)
     voice_preset, voice_code = VOICE_MAP[args.lang]
+    _bible = video.load_character_bible()
+    if st.get("watermark"):
+        _bible["watermark"] = st["watermark"]
     pexels_key = read_key("pexels_key.txt")
     pixabay_key = read_key("pixabay_key.txt")
     eleven_key = read_key("elevenlabs_key.txt")
@@ -176,11 +179,19 @@ def main():
         clip_mode=st["clip_mode"],
         voice_preset=voice_preset,
         sfx_level=float(st["sfx_level"]),
+        pacing=st.get("pacing", "cinematic"),
+        character_bible=_bible,
     )
     db.update_short_video(short_id, v_path, a_path, srt_path, status="created")
     print(f"[4/6] Render complete in {time.time()-t0:.0f}s")
     print(f"      Video:  {os.path.basename(v_path)}")
     print(f"      Thumb:  {os.path.basename(thumb_path) if thumb_path else 'n/a'}")
+    try:
+        _code = db.get_setting("last_code", "")
+        if _code:
+            print(f"      Code:   {_code}  (outro card — pin it or leave it for the hunters)")
+    except Exception:
+        pass
 
     # 5) QC REPORT
     try:

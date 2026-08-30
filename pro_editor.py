@@ -49,6 +49,85 @@ def tension_at(beat_map, t):
 # tension-based shot lengths + 2.5s hard cap + 2-fast-then-slow breathing
 # + every cut snapped to a spoken word boundary (cut-on-word)
 # ==============================================================================
+def _sentence_groups(vtt_subs, gap=0.35):
+    """Group word cues into spoken sentences [(t0, t1, [words])]."""
+    if not vtt_subs:
+        return []
+    groups = []
+    cur = [vtt_subs[0]]
+    for s in vtt_subs[1:]:
+        if s["start"] - cur[-1]["end"] > gap:
+            groups.append(cur)
+            cur = [s]
+        else:
+            cur.append(s)
+    groups.append(cur)
+    return [(g[0]["start"], g[-1]["end"], [w["text"] for w in g]) for g in groups]
+
+
+def build_cosmic_rhythm(vtt_subs, duration, seed=7):
+    """GOONINGGNG grammar — measured from ref_video3 (65s = 8-12 visuals held
+    5-15s, cut on sentence boundaries, one thought per visual).
+    Rules: 1 visual per 1-2 sentences, hold 3.5-9s, never more than 12 visuals,
+    the hook gets a 3s+ hold, cuts land on sentence gaps (the natural pauses)."""
+    if not vtt_subs:
+        # no word timing: fall back to even 6s holds
+        out = []
+        t = 0.0
+        while t < duration:
+            e = min(t + 6.0, duration)
+            if e - t > 0.4:
+                out.append((t, e))
+            t = e
+        return out
+
+    sents = _sentence_groups(vtt_subs)
+    rng = random.Random(seed)
+
+    # merge sentence pairs until we have <= 12 visual units
+    units = [[s] for s in sents]
+    while len(units) > 12:
+        # merge the two SHORTEST adjacent units (they're the ones that look rushed)
+        lens = [(units[i][0][0] and (units[i][-1][1] - units[i][0][0]), i) for i in range(len(units))]
+        lens.sort()
+        i = lens[0][1]
+        if i + 1 < len(units):
+            units[i + 1] = units[i] + units[i + 1]
+            del units[i]
+        else:
+            units[i - 1] = units[i - 1] + units[i]
+            del units[i]
+
+    boundaries = []
+    t = 0.0
+    for u in units:
+        t0, t1 = u[0][0], u[-1][1]
+        # start at the previous sentence end (natural pause), end at this one
+        start = t if not boundaries else min(max(boundaries[-1][1], t0 - 0.12), t0 + 0.25)
+        end = min(t1 + 0.35, duration)  # small tail after the sentence
+        # hold guard: min 3.5s (merge forward by extending end) / max 9s
+        if end - start < 3.5 and end < duration:
+            end = min(start + 3.5, duration)
+        if end - start > 9.0:
+            # long thought: cut it at the midpoint sentence boundary
+            mid = start + 9.0
+            for s2 in u:
+                if s2[0] > mid:
+                    mid = max(start + 3.5, s2[0] - 0.1)
+                    break
+            end = min(mid, duration)
+        if end - start > 0.4:
+            boundaries.append((start, end))
+        t = end
+    # guarantee coverage to the end
+    if boundaries and boundaries[-1][1] < duration - 0.2:
+        s, e = boundaries[-1]
+        boundaries[-1] = (s, duration)
+    elif not boundaries:
+        boundaries = [(0.0, duration)]
+    return boundaries
+
+
 def snap_to_word(t, vtt_subs, window=0.28):
     """Snap a cut point to the nearest spoken word start (cut ON the word)."""
     best, best_d = t, window
@@ -59,21 +138,32 @@ def snap_to_word(t, vtt_subs, window=0.28):
     return best
 
 
-def build_scene_rhythm(beat_map, vtt_subs, duration, seed=7):
-    """Returns (start, end) scene boundaries edited with pro rhythm rules."""
+def build_scene_rhythm(beat_map, vtt_subs, duration, seed=7, pacing="cinematic"):
+    """Returns (start, end) scene boundaries edited with pro rhythm rules.
+    pacing: 'adrenaline' (0.9-1.3s) | 'cinematic' (current) | 'mindful' (slower)
+            | 'cosmic' — the GOONINGGNG grammar: one visual per THOUGHT, held
+            4-9s, cut on sentence boundaries. 8-12 visuals for a 60s video
+            instead of 25-40. Measured from ref_video3: 8-12 holds of 5-15s."""
+    if pacing == "cosmic":
+        return build_cosmic_rhythm(vtt_subs, duration, seed=seed)
+
     rng = random.Random(seed)
+
+    # pacing scales the shot lengths (the app's Video Pacing dropdown —
+    # previously the knob was passed but never read; now it actually works)
+    scale = {"adrenaline": 0.7, "cinematic": 1.0, "mindful": 1.6}.get(pacing, 1.0)
 
     def cut_len(t):
         if t < 3.0:
-            return rng.uniform(0.9, 1.1)          # hook zone: fastest, 3 cuts
+            return rng.uniform(0.9, 1.1) * scale  # hook zone: fastest cuts
         tension = tension_at(beat_map, t)
         if tension >= 5:
-            return rng.uniform(1.0, 1.3)          # climax: fast
+            return rng.uniform(1.0, 1.3) * scale  # climax: fast
         if tension >= 4:
-            return rng.uniform(1.1, 1.5)
+            return rng.uniform(1.1, 1.5) * scale
         if tension >= 3:
-            return rng.uniform(1.4, 1.9)          # value: medium
-        return rng.uniform(1.8, 2.4)              # loop tail: slow
+            return rng.uniform(1.4, 1.9) * scale  # value: medium
+        return rng.uniform(1.8, 2.4) * scale      # loop tail: slow
 
     boundaries = []
     t, fast_streak = 0.0, 0
@@ -87,7 +177,7 @@ def build_scene_rhythm(beat_map, vtt_subs, duration, seed=7):
         if fast_streak >= 2:
             L = max(L, 1.9)
             fast_streak = 0
-        L = min(L, 2.5)                            # HARD CAP: no stall > 2.5s
+        L = min(L, 2.5 * scale)                    # HARD CAP: no stall > 2.5s (scaled)
         end = min(t + L, duration)
         end = snap_to_word(end, vtt_subs)          # cut ON the spoken word
         if end - t >= 0.45:
