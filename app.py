@@ -517,7 +517,6 @@ else:
 meme_sfx_label = col_s5.selectbox("🔥 Meme Sound", [
     "None",
     "Record Scratch",
-    "Anime Wow",
     "Bass Drop",
     "Energy Flare",
     "Tick Tock",

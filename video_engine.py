@@ -704,18 +704,20 @@ def download_pexels_b_roll(query, api_key):
                     return local_path
                     
                 video_files = selected_v.get("video_files", [])
-                target_link = None
-                
-                for vf in video_files:
-                    if vf.get("file_type") == "video/mp4":
-                        w = vf.get("width") or 0
-                        h = vf.get("height") or 0
-                        if w < h:
-                            target_link = vf.get("link")
-                            break
-                            
-                if not target_link and video_files:
+                # SPEED FIX: pick the SMALLEST portrait mp4 (the old code took
+                # the first portrait found — often the biggest file = 2-4x slower
+                # downloads on every new b-roll word)
+                portrait_files = [vf for vf in video_files
+                                  if vf.get("file_type") == "video/mp4"
+                                  and (vf.get("width") or 0) < (vf.get("height") or 0)
+                                  and vf.get("link")]
+                if portrait_files:
+                    portrait_files.sort(key=lambda vf: vf.get("size") or 999999999)
+                    target_link = portrait_files[0].get("link")
+                elif video_files:
                     target_link = video_files[0].get("link")
+                else:
+                    target_link = None
                     
                 if target_link:
                     video_res = requests.get(target_link, timeout=40)
@@ -1005,6 +1007,44 @@ SFX_LIBRARY_MAP = {
 }
 
 
+def _synthesize_legacy_sfx(name):
+    """BROKEN-URL FIX: the old archive.org links 404/503 — these two classics
+    are now generated locally (deterministic), so the option always works,
+    even with zero internet. Returns a wav path or None."""
+    sr = 44100
+    path = os.path.join(DEFAULT_DIR, f"meme_{name}_synth.wav")
+    if os.path.exists(path):
+        return path
+    import wave as _w
+    rng = np.random.default_rng(7)
+    if name == "record_scratch":
+        n = int(sr * 0.5)
+        t = np.arange(n) / sr
+        noise = rng.uniform(-1, 1, n)
+        # two fast "scrape" passes with pitch wobble = the scratch feel
+        wobble = 0.5 + 0.5 * np.sin(2 * np.pi * 14 * t)
+        env = np.exp(-3.2 * t) * (0.35 + 0.65 * wobble)
+        sig = noise * env
+    elif name == "bass_drop":
+        n = int(sr * 0.9)
+        t = np.arange(n) / sr
+        # sub sine sweep 62 -> 31 Hz with a hard attack
+        f = 31 + 31 * np.exp(-4 * t)
+        sub = np.sin(2 * np.pi * np.cumsum(f) / sr) * np.exp(-2.6 * t)
+        # lowpassed noise transient at the drop
+        noise = rng.uniform(-1, 1, n)
+        k = np.ones(31) / 31
+        noise_lp = np.convolve(noise, k, mode="same") * np.exp(-9 * t) * 0.5
+        sig = sub * 0.9 + noise_lp
+    else:
+        return None
+    sig = sig / max(1e-6, np.abs(sig).max()) * 0.9
+    with _w.open(path, "wb") as wf:
+        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(sr)
+        wf.writeframes((np.clip(sig, -1, 1) * 32767).astype(np.int16).tobytes())
+    return path
+
+
 def download_free_meme_sfx(sfx_name):
     name_clean = str(sfx_name).lower().replace(" ", "_")
     # 1) local reference pack (instant, exact sound)
@@ -1016,12 +1056,15 @@ def download_free_meme_sfx(sfx_name):
     if os.path.exists(local_path):
         return local_path
         
+    # anime_wow's archive.org link is dead (404) and a voice sample can't be
+    # synthesized — the option was removed from the UI. The two remaining
+    # classics are SELF-HEALING: URL first, local synthesis as the fallback,
+    # so the option can never be silently broken again.
     urls = {
         "record_scratch": "https://archive.org/download/RecordScratchSoundEffectPlotTwistSound/Record%20Scratch%20Sound%20Effect%21%20%28%20Plot%20Twist%20Sound%29.mp3",
-        "anime_wow": "https://archive.org/download/wow-sound-effect_202012/wow.mp3",
         "bass_drop": "https://archive.org/download/bass-drop_202108/bass-drop.mp3"
     }
-    
+
     url = urls.get(name_clean)
     if url:
         try:
@@ -1031,80 +1074,13 @@ def download_free_meme_sfx(sfx_name):
                 with open(local_path, "wb") as f:
                     f.write(r.content)
                 return local_path
+            print(f"Meme SFX download failed (HTTP {r.status_code}) — using local synthesis.")
         except Exception as e:
-            print(f"Meme SFX download failed: {e}")
+            print(f"Meme SFX download failed: {e} — using local synthesis.")
+    synth = _synthesize_legacy_sfx(name_clean)
+    if synth:
+        return synth
     return None
-
-# --- CINEMATIC ANIMATED PRESET GENERATOR WITH PARTICLES & VIGNETTE ---
-def make_animated_background_clip(duration, theme="Curiosity"):
-    width, height = 720, 1280
-    theme_str = str(theme).lower()
-    
-    if "success" in theme_str or "emerald" in theme_str:
-        c1, c2, orb_color = (6, 78, 59), (15, 23, 42), (16, 185, 129)
-    elif "urgency" in theme_str or "crimson" in theme_str:
-        c1, c2, orb_color = (127, 29, 29), (15, 23, 42), (239, 68, 68)
-    elif "story" in theme_str or "blue" in theme_str:
-        c1, c2, orb_color = (30, 58, 138), (15, 23, 42), (59, 130, 246)
-    else:
-        c1, c2, orb_color = (15, 23, 42), (88, 28, 135), (168, 85, 247)
-
-    np.random.seed(42)
-    particles = []
-    for _ in range(35):
-        particles.append({
-            'x_pct': np.random.rand(),
-            'y_start_pct': np.random.rand(),
-            'speed': 0.04 + 0.08 * np.random.rand(),
-            'size': 2 + int(4 * np.random.rand()),
-            'opacity': 40 + int(120 * np.random.rand())
-        })
-
-    base_img = Image.new("RGB", (width, height))
-    base_draw = ImageDraw.Draw(base_img)
-    for y in range(height):
-        r = int(c1[0] + (c2[0] - c1[0]) * y / height)
-        g = int(c1[1] + (c2[1] - c1[1]) * y / height)
-        b = int(c1[2] + (c2[2] - c1[2]) * y / height)
-        base_draw.line([(0, y), (width, y)], fill=(r, g, b))
-
-    def make_frame(t):
-        img = base_img.copy()
-        draw = ImageDraw.Draw(img, "RGBA")
-        
-        grid_color = (255, 255, 255, 10)
-        for gx in range(1, 6):
-            draw.line([(gx * 120, 0), (gx * 120, height)], fill=grid_color, width=1)
-        for gy in range(1, 10):
-            draw.line([(0, gy * 128), (width, gy * 128)], fill=grid_color, width=1)
-            
-        for p in particles:
-            x = int(p['x_pct'] * width)
-            y = int(((p['y_start_pct'] - p['speed'] * t) % 1.0) * height)
-            rad = p['size']
-            draw.ellipse([x - rad, y - rad, x + rad, y + rad], fill=(orb_color[0], orb_color[1], orb_color[2], p['opacity']))
-            if rad > 3:
-                draw.ellipse([x - rad - 2, y - rad - 2, x + rad + 2, y + rad + 2], fill=(orb_color[0], orb_color[1], orb_color[2], int(p['opacity'] * 0.4)))
-        
-        cx1 = 360 + int(140 * np.sin(t * 1.1))
-        cy1 = 550 + int(90 * np.cos(t * 0.8))
-        rad1 = 180 + int(20 * np.sin(t * 2.0))
-        draw.ellipse([cx1 - rad1, cy1 - rad1, cx1 + rad1, cy1 + rad1], fill=(orb_color[0], orb_color[1], orb_color[2], 55))
-        
-        cx2 = 360 + int(180 * np.cos(t * 0.9))
-        cy2 = 800 + int(110 * np.sin(t * 0.6))
-        rad2 = 210
-        draw.ellipse([cx2 - rad2, cy2 - rad2, cx2 + rad2, cy2 + rad2], fill=(255, 255, 255, 20))
-
-        for border in range(0, 160, 10):
-            opacity = int(((border / 160) ** 2) * 150)
-            draw.rectangle([border, border, width-border, height-border], outline=(0, 0, 0, opacity), width=10)
-
-        draw.rectangle([18, 18, width-18, height-18], outline=(255, 255, 255, 35), width=2)
-        
-        return np.array(img)
-
-    return VideoClip(make_frame, duration=duration)
 
 # --- PROCEDURAL EDITORIAL GRAPHIC CARD GENERATOR ---
 def make_solid_color_card_clip(duration, color_tuple=(30, 58, 138)):
@@ -1188,45 +1164,6 @@ def make_ken_burns_clip(img_path, duration):
         return arr
         
     return VideoClip(make_frame, duration=duration)
-
-# --- VIRAL PSYCHOLOGY RETENTION STICKER OVERLAYS ---
-def make_high_impact_badge(text, color_bg=(255, 59, 48, 235), outline_color=(255, 255, 255, 255)):
-    # Size of sticker
-    width, height = 480, 110
-    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    # Draw rounded background
-    draw.rounded_rectangle(
-        [(10, 10), (width - 10, height - 10)], 
-        radius=25, 
-        fill=color_bg, 
-        outline=outline_color, 
-        width=4
-    )
-    
-    # Write text in bold center
-    from PIL import ImageFont
-    try:
-        font = ImageFont.load_default(size=28)
-    except TypeError:
-        font = ImageFont.load_default()
-
-    text_w = len(text) * 14
-    text_x = (width - text_w) // 2
-    text_y = (height - 38) // 2
-    
-    draw.text((text_x, text_y), text, fill=(255, 255, 255, 255), font=font)
-    return img
-
-def build_retention_overlays(duration):
-    """
-    DEPRECATED — the gimmick warning badges (DO NOT SCROLL etc.) were removed.
-    They are replaced by the content-driven elite text layer (style_engine):
-    stacked hook, script beats, curiosity cards, stat cards and arrows.
-    Kept as a no-op for backward compatibility.
-    """
-    return []
 
 # --- CINEMATIC RADIAL VIGNETTE OVERLAY (EYE FUNNEL MASK) ---
 def make_vignette_overlay(duration):
@@ -3031,7 +2968,8 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     
     if progress_cb: progress_cb(0.80, "Slicing word-by-word caption timings and mapping power-word highlights...")
     caption_style = kwargs.get("caption_style", db_caption_style)
-    text_clips, sfx_clips = build_subtitle_and_sfx_clips(parse_vtt(vtt_path), color=font_color, caption_style=caption_style, font_size=db_font_size, total_duration=duration, accent_rgb=accent_rgb, sfx_level=sfx_level)
+    # SPEED FIX: reuse the vtt_subs parsed at the top (was parsed twice)
+    text_clips, sfx_clips = build_subtitle_and_sfx_clips(vtt_subs, color=font_color, caption_style=caption_style, font_size=db_font_size, total_duration=duration, accent_rgb=accent_rgb, sfx_level=sfx_level)
     
     # Mix all sound design elements (subtitles pop clicks + transition whooshes + meme triggers) into the main audio track!
     all_sfx = sfx_clips + transition_audio_clips
@@ -3057,13 +2995,6 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     # NEW: Elite text layer — hook / beats / cards / arrows (content-driven retention)
     extra_clips.extend(elite_clips)
         
-    # PRO PASS 7 — QC: luminance floor sweep (no dead-black frames allowed)
-    if pe is not None:
-        try:
-            pe.qc_luminance_sweep(bg_clip, duration, step=1.0)
-        except Exception:
-            pass
-
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
     # --- COMBINED ROBUST WINDOWS COLORSPACE & CODEC FIXED FORMAT + SPEED PRESET SPEEDUP ---
     CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
