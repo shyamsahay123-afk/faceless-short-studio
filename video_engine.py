@@ -1663,15 +1663,34 @@ def apply_energy_arc(music_clip, peak_t=None, total_duration=30.0):
 # --- SPEECH CLEANER ---
 def clean_script_for_speech(script_text):
     if not script_text: return ""
-    lines = str(script_text).split('\n')
+    clean_text = str(script_text)
+    
+    # 1. Remove all block headers strictly (e.g. [0-3 sec HOOK], [VALUE DELIVERY], [ENGAGEMENT CTA])
+    clean_text = re.sub(r'\[[A-Z0-9\-\s]+\]', '', clean_text)
+    
+    # 2. Remove the PSYCHOLOGY TRIGGER header AND the instruction sentence immediately following it!
+    # The previous regex was missing this, causing the AI to read the prompt instructions aloud.
+    clean_text = re.sub(r'\[PSYCHOLOGY TRIGGER:[^\]]+\]\s*(.*?)(?:\n\n|\Z)', '\n\n', clean_text, flags=re.DOTALL)
+    
+    # 3. Remove inline tags like [MICRO_MEME: ...], [SOUND_DROP], [SAVE_TRIGGER_LIST: ...]
+    clean_text = re.sub(r'\[MICRO_MEME:[^\]]+\]', '', clean_text)
+    clean_text = re.sub(r'\[SOUND_DROP\]', '', clean_text)
+    clean_text = re.sub(r'\[SAVE_TRIGGER_LIST:[^\]]+\]', '', clean_text)
+    
+    # 4. Remove bracketed text blocks (like the CTA at the end)
+    clean_text = re.sub(r'\[.*?\]', '', clean_text)
+    
+    # 5. Clean up emoji and markdown
+    lines = clean_text.split('\n')
     cleaned = []
     for line in lines:
         l = line.strip()
-        if not l or (l.startswith('[') and l.endswith(']')): continue
+        if not l: continue
         if l.startswith(('-', '•')): l = l[1:].strip()
         l = l.replace('+', 'and').replace('👇', 'below').replace('🔥', 'fire').replace('📈', 'to grow').replace('🧠', 'psychology').replace('🎯', 'target')
         cleaned.append(l)
-    return re.sub(r'\[.*?\]', '', " ".join(cleaned)).strip()
+        
+    return " ".join(cleaned).strip()
 
 # --- PROACTIVE THREADED ELEVENLABS SPEECH GENERATOR ---
 # VOICE PRESETS (Piece 7 — "tones"): voice_id + per-preset tone settings.
