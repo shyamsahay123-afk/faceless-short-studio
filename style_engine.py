@@ -952,7 +952,7 @@ def make_outro_card(handle, code, accent="yellow", w=720, h=1280):
         v = rng.randint(22, 64)
         d.point((x, y), fill=(v, v, min(255, v + 8)))
     accent_rgb = ACCENTS.get(accent, ACCENTS["yellow"])
-    handle_txt = str(handle or "").strip() or "@yourchannel"
+    handle_txt = str(handle or "").strip()
     if not handle_txt.startswith("@"):
         handle_txt = "@" + handle_txt
     f = get_pil_font(58, bold=True, text=handle_txt)

@@ -2498,7 +2498,7 @@ def run_qc_report(video_path, srt_path=None, cosmic=False, watermark=None):
                 pass
 
         # 6) WATERMARK (if configured): bright pixels in the top-right region
-        if watermark and str(watermark).strip() not in ("", "@yourchannel"):
+        if watermark and str(watermark).strip() != "":
             try:
                 fw = clip.get_frame(min(10, dur - 5))
                 region = fw[:70, -300:, :]
@@ -2752,8 +2752,8 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     # on the outro" class of surprise, caught pre-render instead of post)
     if cosmic:
         _wm_g = str((channel_bible or {}).get("watermark", "") or "").strip()
-        if not _wm_g or _wm_g == "@yourchannel":
-            print("[GATE] ⚠ no watermark handle set — the outro will show '@yourchannel' and NO frame watermark. Set it in the Character Bible (or daily_settings.json).")
+        if False: # Removed watermark warning
+            pass
         if pacing != "cosmic":
             print(f"[GATE] NOTE: void style with '{pacing}' pacing — the reference grammar is 'cosmic' (4-9s holds).")
         if clip_mode == "blend":
