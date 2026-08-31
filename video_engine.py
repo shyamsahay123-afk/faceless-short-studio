@@ -3363,7 +3363,22 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             print(f"[StyleEngine] watermark failed: {e}")
     if progress_cb: progress_cb(0.88, "Compiling multi-track layers & starting FFmpeg rendering encoder...")
     # --- COMBINED ROBUST WINDOWS COLORSPACE & CODEC FIXED FORMAT + SPEED PRESET SPEEDUP ---
-    CompositeVideoClip([bg_clip] + text_clips + extra_clips).write_videofile(
+    
+    # --- STRICT 59.5 SECOND TRIM (YouTube Shorts Compliance) ---
+    final_comp = CompositeVideoClip([bg_clip] + text_clips + extra_clips)
+    if duration > 59.5:
+        print(f"[Engine] WARNING: Raw duration {duration:.2f}s exceeds Shorts limit. Hard trimming to 59.5s.")
+        final_comp = final_comp.subclipped(0, 59.5)
+        # Apply the audio and strictly cut the audio too
+        if final_audio:
+            final_audio = final_audio.subclipped(0, 59.5)
+            final_comp = final_comp.with_audio(final_audio)
+    else:
+        if final_audio:
+            final_comp = final_comp.with_audio(final_audio)
+            
+    final_comp.write_videofile(
+
         output_video_path, 
         fps=24, 
         codec="libx264", 
