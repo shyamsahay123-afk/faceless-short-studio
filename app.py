@@ -283,7 +283,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v1.1.4</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v1.2.0</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
