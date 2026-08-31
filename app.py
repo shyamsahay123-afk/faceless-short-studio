@@ -291,7 +291,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.0.0</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.0.1</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
@@ -381,7 +381,7 @@ if st.button("🤖 STEP 1: DRAFT SCRIPT & ANALYZE KEYWORDS", type="primary", use
         st.session_state['active_title'] = title
         st.session_state['active_script'] = script
         st.session_state['active_tags'] = tags
-        st.session_state['active_trigger'] = trigger_used
+        st.session_state['active_trigger'] = "AI Director" if isinstance(extra_data, dict) else "Legacy Template"
         st.success("🎉 Script Drafted successfully! Tweak and edit your spoken lines below before rendering!")
 
 # INTERACTIVE SCRIPT EDITOR CONTAINER (Shows ONLY if script has been generated)
@@ -641,11 +641,11 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
         # If they clicked compile but forgot to click Step 1, auto-draft the script silently right now!
         if 'active_script' not in st.session_state:
             title, script, tags, extra_data = auto_generate_script_local(topic_input, style_choice)
-        st.session_state['active_ai_data'] = extra_data if isinstance(extra_data, dict) else None
+            st.session_state['active_ai_data'] = extra_data if isinstance(extra_data, dict) else None
             st.session_state['active_title'] = title
             st.session_state['active_script'] = script
             st.session_state['active_tags'] = tags
-            st.session_state['active_trigger'] = trigger_used
+            st.session_state['active_trigger'] = "AI Director" if isinstance(extra_data, dict) else "Legacy Template"
             
         if st.session_state['active_title'] == "Safety Warning":
             st.error("❌ Cannot compile: Please select a non-restricted creative topic in Step 2!")
