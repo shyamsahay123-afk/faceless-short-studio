@@ -452,7 +452,7 @@ def _redact_scribble(d, x0, y0, x1, y1, seed=7):
         d.line([(x0 + 4, yy + 2), (x1 - 4, yy - 2)], fill=(180, 20, 30, 220), width=6)
 
 
-def make_curiosity_card(title, items, redact=True, accent="yellow", w=600, h=520):
+def make_curiosity_card(title, items, redact=True, accent="yellow", w=600, h=520, visible_count=3):
     accent_rgb = ACCENTS.get(accent, ACCENTS["yellow"])
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -466,6 +466,8 @@ def make_curiosity_card(title, items, redact=True, accent="yellow", w=600, h=520
     f_body = get_pil_font(34, bold=True)
     y = 160
     for i, item in enumerate(items[:3]):
+        if i >= visible_count:
+            break
         # strip any leading "N." the script already contains (avoids "3. 3." double numbering)
         clean_item = re.sub(r"^\s*\d+[\.\)]\s*", "", str(item))
         text = f"{i+1}.  {clean_item}"
@@ -839,14 +841,22 @@ def build_elite_text_layer(script_text, vtt_subs, duration, accent="yellow",
         except Exception as e:
             print(f"[StyleEngine] card failed: {e}")
         try:
-            card_reveal = make_curiosity_card("THE LIST", card_items, redact=False, accent=accent)
-            # fixed hold so it never collides with the Before/After card or end beats
-            c2 = make_text_pop_clip(Image.fromarray(np.array(card_reveal)), reveal_t,
-                                    ("center", 640), 2.6)
-            clips.append(c2)
-            # v2: THE reveal is the single biggest audio moment of the video
-            sfx_events.append(("__ding__", reveal_t, 0.30))
-            sfx_events.append(("__impact__", reveal_t, 0.40))
+            # SEQUENTIAL REVEAL (Fixing the Curiosity Killer)
+            # Instead of showing the full list at once, we reveal it one by one.
+            stage_dur = 2.6 / len(card_items[:3]) if card_items else 2.6
+            for i in range(len(card_items[:3])):
+                stage_card = make_curiosity_card("THE LIST", card_items, redact=False, accent=accent, visible_count=i+1)
+                start_time = reveal_t + (i * stage_dur)
+                hold_time = stage_dur if i < len(card_items[:3]) - 1 else 1.2
+                
+                c_stage = make_text_pop_clip(Image.fromarray(np.array(stage_card)), start_time,
+                                        ("center", 640), hold_time)
+                clips.append(c_stage)
+                # Play a 'pop' sound for every new item on the list
+                sfx_events.append(("__ding__", start_time, 0.30))
+                
+            # The heavy impact hits on the final item
+            sfx_events.append(("__impact__", reveal_t + (len(card_items[:3])-1)*stage_dur, 0.40))
         except Exception as e:
             print(f"[StyleEngine] reveal failed: {e}")
         # Remove the arrow entirely. The giant red scribble is enough contrast,
