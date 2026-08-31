@@ -264,9 +264,9 @@ with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
     st.markdown(display_status_badge(test_huggingface_key_connection(huggingface_token)), unsafe_allow_html=True)
     st.write("")
     
-    # Pollinations Key (B3 — OPTIONAL): sk_/pk_ key = no rate limit, no watermark
+    # Pollinations Key (B3 — OPTIONAL): sk_/pk_ key = no rate limit
     saved_poll = get_secret_key("POLLINATIONS_KEY", "pollinations_key.txt")
-    raw_poll = st.text_input("Pollinations Key (optional — no watermark)", type="password", value=saved_poll)
+    raw_poll = st.text_input("Pollinations Key", type="password", value=saved_poll)
     pollinations_key = clean_api_key(raw_poll)
     if pollinations_key != saved_poll:
         save_key_to_file("pollinations_key.txt", pollinations_key)
@@ -274,7 +274,7 @@ with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
         _poll_ok = pollinations_key.startswith(("sk_", "pk_"))
         st.markdown(display_status_badge("valid" if _poll_ok else "invalid"), unsafe_allow_html=True)
     else:
-        st.caption("⚪ Keyless works, but is rate-limited (~1 image/15s) and watermarked")
+        st.caption("⚪ Optional: Add key to remove rate limits")
 
 st.sidebar.divider()
 all_shorts = db.get_all_shorts()
@@ -283,7 +283,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v1.1.0</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
@@ -591,9 +591,8 @@ bib_enabled = col_b1.toggle("Character bible ON", value=bible.get("enabled", Tru
 bib_name = col_b1.text_input("Character name", value=bible.get("name", "The Narrator"))
 bib_desc = col_b2.text_area("Character description (locked in every AI image)", value=bible.get("description", ""))
 bib_seed = col_b3.number_input("Seed (locked)", min_value=1, max_value=9999999, value=int(bible.get("seed", 421337)))
-# Watermark lock (GOONINGGNG runs its IG handle on every frame) — used by the
-# Void Black mode's outro card + top-right watermark
-bib_handle = st.text_input("Watermark handle (top-right, every frame — e.g. @yourchannel)", value=bible.get("watermark", ""))
+# Watermark lock removed as requested
+bib_handle = "" 
 if st.button("💾 Save Character Bible", use_container_width=False):
     video.save_character_bible({"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
                                 "watermark": bib_handle,
