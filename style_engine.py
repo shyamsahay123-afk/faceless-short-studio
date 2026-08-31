@@ -838,6 +838,8 @@ def build_elite_text_layer(script_text, vtt_subs, duration, accent="yellow",
                                    max(1.2, reveal_t - card_start))
             clips.append(c)
             sfx_events.append(("__whoosh__", card_start, 0.30))
+            # The Subconscious Audio Anchor (Riser before climax)
+            sfx_events.append(("__riser__", max(0, reveal_t - 2.0), 0.25))
         except Exception as e:
             print(f"[StyleEngine] card failed: {e}")
         try:

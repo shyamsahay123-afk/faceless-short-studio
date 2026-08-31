@@ -1700,7 +1700,7 @@ def clean_script_for_speech(script_text):
 VOICE_PRESETS = {
     "Deep Narrator Male": {
         "voice_id": "ErXwobaYiN019PkySvjV",          # Adam
-        "settings": {"stability": 0.35, "similarity_boost": 0.78, "style": 0.20, "speaker_boost": True},
+        "settings": {"stability": 0.25, "similarity_boost": 0.85, "style": 0.35, "speaker_boost": True},
         "speed": 0.92,   # GOONINGGNG delivery: slow + low = the "deep voice that came"
     },
     "Energetic Male": {
@@ -1725,7 +1725,7 @@ VOICE_PRESETS = {
 # eleven_v3 = best human tone (may need a paid tier depending on account)
 # eleven_multilingual_v2 / turbo = always available, still human.
 # Every fallback prints LOUDLY so you know which engine actually served the voice.
-ELEVEN_MODEL_CHAIN = ["eleven_v3", "eleven_multilingual_v2", "eleven_turbo_v2_5"]
+ELEVEN_MODEL_CHAIN = ["eleven_turbo_v2_5", "eleven_v3", "eleven_multilingual_v2"]
 
 
 def _eleven_settings_for_model(preset, model):
