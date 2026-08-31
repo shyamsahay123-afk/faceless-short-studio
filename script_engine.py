@@ -189,8 +189,6 @@ def auto_generate_script_local(topic, style_choice):
     full_script = f"""[0-3 sec HOOK]
 {hook}
 
-[PSYCHOLOGY TRIGGER: {hook_category}]
-{P["trigger_desc"]}
 
 [VALUE DELIVERY]
 {P["openers"][op_i]}
