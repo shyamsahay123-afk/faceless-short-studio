@@ -680,6 +680,44 @@ def expand_keyword_to_concept(word, cosmic=False):
         return None  # no cosmic match -> caller draws from the cosmic pool
     return CONCEPT_EXPANSIONS.get(word_clean, f"aesthetic {word_clean}")
 
+
+# --- B-ROLL VARIETY ENGINE ---
+RECENT_BROLL_FAMILIES = []
+
+def get_variety_cosmic_concept(query):
+    global RECENT_BROLL_FAMILIES
+    
+    # Categorize the pool into families
+    families = {
+        "clock": ["vintage clock face roman numerals", "vintage clock face roman numerals dark", "clock dark macro"],
+        "brain": ["brain neurons dark", "neurons firing dark macro", "dark macro brain"],
+        "nebula": ["dark nebula space slow", "spiral galaxy dark", "dark red nebula space", "dark nebula space vortex", "nebula swirl dark space"],
+        "comet": ["comet star field night", "shooting star night sky", "comet stars night sky"],
+        "moon": ["moon stars night sky", "moon dark sky stars"],
+        "abstract": ["eclipse dark space", "ink in water dark", "dark ocean wave night"]
+    }
+    
+    # What family did the query map to natively?
+    import zlib
+    seed_idx = zlib.crc32(str(query).encode("utf-8"))
+    
+    # We want to pick a family that isn't in the last 2 used.
+    available_families = [f for f in families.keys() if f not in RECENT_BROLL_FAMILIES[-2:]]
+    if not available_families:
+        available_families = list(families.keys())
+        
+    chosen_family = available_families[seed_idx % len(available_families)]
+    
+    # Pick a shot from that family
+    shots = families[chosen_family]
+    chosen_shot = shots[seed_idx % len(shots)]
+    
+    RECENT_BROLL_FAMILIES.append(chosen_family)
+    if len(RECENT_BROLL_FAMILIES) > 4:
+        RECENT_BROLL_FAMILIES.pop(0)
+        
+    return chosen_shot
+
 # --- KEYWORD EXTRACTOR FOR AUTOMATED B-ROLL SEARCH ---
 def extract_best_keywords(text, num_words=12):
     stop_words = {
@@ -835,7 +873,7 @@ def download_pexels_b_roll_with_fallback(query, api_key, source="pexels", color_
     if cosmic and expanded is None:
         # no cosmos match for this word: deterministic draw from the cosmic pool
         import zlib
-        expanded = COSMIC_POOL[zlib.crc32(str(query).encode("utf-8")) % len(COSMIC_POOL)]
+        expanded = get_variety_cosmic_concept(query)
     
     clip = None
     if source == "pixabay":
