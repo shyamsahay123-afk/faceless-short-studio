@@ -3388,14 +3388,8 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     if duration > 59.5:
         print(f"[Engine] WARNING: Raw duration {duration:.2f}s exceeds Shorts limit. Hard trimming to 59.5s.")
         final_comp = final_comp.subclipped(0, 59.5)
-        # Apply the audio and strictly cut the audio too
-        if final_audio:
-            final_audio = final_audio.subclipped(0, 59.5)
-            final_comp = final_comp.with_audio(final_audio)
-    else:
-        if final_audio:
-            final_comp = final_comp.with_audio(final_audio)
-            
+        # MoviePy's subclip natively trims the audio attached to the composite!
+
     final_comp.write_videofile(
 
         output_video_path, 
