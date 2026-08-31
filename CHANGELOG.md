@@ -1,4 +1,8 @@
 # Studio Changelog / Ledger\n
+## v1.2.1 - 2026-08-31
+* **Sentence-Level Visual Sync:** Ripped out the chaotic single-word sync ("word salad"). B-roll is now assigned based on the core thematic concept of the entire 4-6 second sentence.
+* **The "2D-to-3D" Trick (Continuous Zoom):** Applied a mandatory 1.0x -> 1.15x Ken Burns scale function to all full-screen B-roll clips so the visual momentum never stops, even on still shots.
+\n
 ## v1.2.0 - 2026-08-31
 * **Sequential List Reveal (Curiosity Fix):** Rewrote the Curiosity Card compiler. Instead of flashing the full list on screen and killing watch time, it now builds the list item by item (1, then 2, then 3) synced to the beat.
 \n

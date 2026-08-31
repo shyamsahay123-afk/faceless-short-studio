@@ -3087,9 +3087,13 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
             
         clip_added = False
         search_word = None
-        # PRO FIX: VTT-SYNCED selection — the visual must match the word being
-        # SPOKEN right now (not a rotating list from the whole script)
-        sync_word = spoken_word_in_window(start_t, end_t, vtt_subs, used_search_words)
+        # SENTENCE-LEVEL CONCEPT SYNC
+        # Instead of erratic single-word matching ("brain", then "time", then "infinity"),
+        # we pull the dominant thematic concept from the entire sentence.
+        sync_word = None
+        if idx < len(sentence_words):
+            sync_word = sentence_words[idx]
+        
         if sync_word:
             used_search_words.add(sync_word)
             search_word = sync_word
