@@ -119,7 +119,8 @@ def generate_script_with_score(topic, style_choice, min_score=60, tries=6):
     This is what daily.py uses — no more rendering weak hooks on autopilot."""
     best = None
     for _ in range(max(1, tries)):
-        title, script, tags, trigger = auto_generate_script_local(topic, style_choice)
+        title, script, tags, trigger_data = auto_generate_script_local(topic, style_choice)
+        trigger = "AI Director" if isinstance(trigger_data, dict) else trigger_data
         if title == "Safety Warning":
             return title, script, tags, trigger, 0
         hook = best_hook_line(script)
@@ -134,7 +135,40 @@ def generate_script_with_score(topic, style_choice, min_score=60, tries=6):
 # ==============================================================================
 # THE SCRIPT GENERATOR (moved verbatim from app.py — behavior unchanged)
 # ==============================================================================
+
+import os
+import ai_director
+
 def auto_generate_script_local(topic, style_choice):
+    topic_lower = str(topic).lower()
+    if any(k in topic_lower for k in ["bomb", "terror", "explosive", "weapon", "child abuse", "abuse", "murder"]):
+        return "Safety Warning", "[SCRIPT BLOCKED] For personal and algorithmic safety, content involving explosives, terrorism, or severe violence cannot be compiled. Please choose another creative topic!", "safety, warning", "Safety Block"
+        
+    groq_key_path = os.path.join(os.path.dirname(__file__), "groq_key.txt")
+    groq_key = None
+    if os.path.exists(groq_key_path):
+        groq_key = open(groq_key_path, "r", encoding="utf-8").read().strip()
+        
+    if groq_key:
+        print("[ScriptEngine] Groq Key found! Routing to AI Director (LLM)...")
+        ai_data = ai_director.generate_smart_script(topic, groq_key)
+        if ai_data:
+            title = ai_data.get("seo", {}).get("title", topic)
+            script = ai_data.get("script", "Fallback script")
+            tags = ai_data.get("seo", {}).get("tags", "shorts, viral")
+            
+            # Save the extended data to the script text temporarily or side-load it?
+            # It's cleaner to return it, but that breaks the tuple unpacking in app.py.
+            # Let's attach the thumbnail prompt and seo description to the tags or trigger string
+            # to avoid breaking app.py signatures, or just update app.py too.
+            # Let's update app.py tuple unpacking!
+            return title, script, tags, ai_data
+            
+    print("[ScriptEngine] No Groq Key or API failed. Falling back to template engine...")
+    return legacy_generate_script(topic, style_choice)
+    
+def legacy_generate_script(topic, style_choice):
+
     """SCRIPT COMPOSER (v2) — replaces the old 4-template generator.
     The old code had ONE hardcoded body per style: video #1 and video #100
     read the same paragraph. Now every video is COMPOSED from per-style

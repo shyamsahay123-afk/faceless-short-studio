@@ -228,6 +228,14 @@ db.init_db()
 st.sidebar.subheader("🔑 Advanced API Keys")
 
 with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
+    # Groq Key (The New Brain)
+    saved_groq = get_secret_key("GROQ_API_KEY", "groq_key.txt")
+    raw_groq_key = st.text_input("Groq Key (AI Director LLM)", type="password", value=saved_groq)
+    if raw_groq_key != saved_groq:
+        save_local_key("groq_key.txt", raw_groq_key)
+        st.rerun()
+    st.caption(f"{'🟢 Connected' if raw_groq_key.strip() else '🔴 Missing (Using legacy templates)'}")
+    
     # Pexels Key
     saved_pexels = get_secret_key("PEXELS_API_KEY", "pexels_key.txt")
     raw_pexels_api_key = st.text_input("Pexels Key (Video)", type="password", value=saved_pexels)
@@ -283,7 +291,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v1.2.2</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.0.0</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
@@ -368,7 +376,8 @@ if st.button("🤖 STEP 1: DRAFT SCRIPT & ANALYZE KEYWORDS", type="primary", use
     if not topic_input or not topic_input.strip():
         st.error("⚠️ Please enter a Topic or select a trend first!")
     else:
-        title, script, tags, trigger_used = auto_generate_script_local(topic_input, style_choice)
+        title, script, tags, extra_data = auto_generate_script_local(topic_input, style_choice)
+        st.session_state['active_ai_data'] = extra_data if isinstance(extra_data, dict) else None
         st.session_state['active_title'] = title
         st.session_state['active_script'] = script
         st.session_state['active_tags'] = tags
@@ -631,7 +640,8 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
     else:
         # If they clicked compile but forgot to click Step 1, auto-draft the script silently right now!
         if 'active_script' not in st.session_state:
-            title, script, tags, trigger_used = auto_generate_script_local(topic_input, style_choice)
+            title, script, tags, extra_data = auto_generate_script_local(topic_input, style_choice)
+        st.session_state['active_ai_data'] = extra_data if isinstance(extra_data, dict) else None
             st.session_state['active_title'] = title
             st.session_state['active_script'] = script
             st.session_state['active_tags'] = tags
