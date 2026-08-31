@@ -1424,6 +1424,7 @@ def best_thumb_variant():
 
 
 def generate_thumbnail(video_path, hook_text, accent_rgb=(255, 215, 0), out_path=None, variant=0):
+    return None  # User requested manual thumbnails via Creator Hub Prompt
     try:
         try:
             import imageio_ffmpeg
