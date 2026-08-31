@@ -1322,13 +1322,14 @@ def _finish_thumbnail(frame_path, out_path, hook_text, accent_rgb, text_y=60, ba
     """PIL body of the thumbnail (kept separate so the frame file has a
     guaranteed try/finally cleanup in generate_thumbnail)."""
     img = Image.open(frame_path).convert("RGBA")
-    img = img.resize((1280, 720))
+    # YouTube Shorts Thumbnails must be vertical 720x1280 (not 1280x720)
+    img = img.resize((720, 1280))
     # 1) darken the top band so the hook text reads (locked rule)
     dark = Image.new("RGBA", img.size, (0, 0, 0, 0))
     dd = ImageDraw.Draw(dark)
     Wd, Hd = img.size
-    for y in range(min(340, Hd)):
-        dd.line([(0, y), (Wd, y)], fill=(0, 0, 0, int(175 * (1 - y / 340))))
+    for y in range(min(540, Hd)):
+        dd.line([(0, y), (Wd, y)], fill=(0, 0, 0, int(195 * (1 - y / 540))))
     img = Image.alpha_composite(img, dark)
     d = ImageDraw.Draw(img, "RGBA")
     # 2) hook text: first 2-3 meaningful words, UPPERCASE, channel font + accent

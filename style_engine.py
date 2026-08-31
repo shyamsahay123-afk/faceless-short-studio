@@ -849,15 +849,9 @@ def build_elite_text_layer(script_text, vtt_subs, duration, accent="yellow",
             sfx_events.append(("__impact__", reveal_t, 0.40))
         except Exception as e:
             print(f"[StyleEngine] reveal failed: {e}")
-        # arrow pointing at card (upper-right, clear of the beat panel)
-        try:
-            arrow = make_arrow_img(color=(255, 196, 0))
-            arrow = arrow.resize((230, 200), Image.LANCZOS)
-            ac = make_text_pop_clip(arrow, card_start + 0.35, (430, 330),
-                                    max(0.8, reveal_t - card_start - 0.35), y_bob=9)
-            clips.append(ac)
-        except Exception as e:
-            print(f"[StyleEngine] arrow failed: {e}")
+        # Remove the arrow entirely. The giant red scribble is enough contrast,
+        # and the yellow arrow pointing randomly into space breaks the luxury feel.
+        pass
 
     # ---- 4. STAT PROOF CARD (if script has a % number) — shown DURING the hook,
     # small, mid-left, never colliding with the list card or captions ----
