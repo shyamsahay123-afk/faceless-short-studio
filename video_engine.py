@@ -2917,7 +2917,13 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         vibe_color_rgb = (15, 23, 42) # Moody Violet
     
     # Extract different, unique keywords for EVERY cut index!
-    sentence_words = extract_best_keywords(spoken_text, num_words=num_cuts)
+    # If the AI Director (v2.0) provided explicit queries, USE THEM instead of blind NLP extraction!
+    sentence_words = []
+    if kwargs.get("ai_data") and isinstance(kwargs["ai_data"], dict):
+        sentence_words = kwargs["ai_data"].get("b_roll_queries", [])
+    
+    if not sentence_words or len(sentence_words) < 2:
+        sentence_words = extract_best_keywords(spoken_text, num_words=num_cuts)
     
     # --- PROACTIVE RETENTION UPGRADE: DOWNLOAD MEME SFX LOOP ---
     meme_sfx_name = kwargs.get("meme_sfx_name", None)
