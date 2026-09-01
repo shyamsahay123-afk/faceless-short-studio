@@ -299,7 +299,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.2.3</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.2.4</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
@@ -672,9 +672,7 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
                 clip_mode=clip_mode_val,
                 voice_preset=ai_voice_label,
                 sfx_level=sfx_level,
-                character_bible={"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
-                                 "watermark": bib_handle,
-                                 "style_suffix": video.load_character_bible().get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")},
+                character_bible=video.load_character_bible(),
                 tricks=tricks_on,
             )
             
@@ -687,7 +685,7 @@ if st.button("👉 GENERATE & COMPILE MY AI VIDEO NOW 👈", type="primary", use
             # Dead frames, style drift, missing outro/watermark/captions, dead
             # audio: all flagged with exact timestamps.
             try:
-                _qc = video.run_qc_report(v_path, vtt_path, cosmic=(bg_style_val == "void"), watermark=bib_handle)
+                _qc = video.run_qc_report(v_path, vtt_path, cosmic=(bg_style_val == "void"), watermark='')
                 _qc_warn = [l for l in _qc if l.startswith("⚠") or l.startswith("❌")]
                 with st.expander("🔍 QC Self-Audit — " + ("ISSUES FOUND, timestamps below" if _qc_warn else "all clear"), expanded=bool(_qc_warn)):
                     for _l in _qc:
@@ -768,9 +766,7 @@ with st.expander("📦 Batch Mode — generate a week of videos in one run (asse
                     clip_mode=clip_mode_val,
                     voice_preset=ai_voice_label,
                     sfx_level=sfx_level,
-                    character_bible={"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
-                                     "watermark": bib_handle,
-                                 "style_suffix": video.load_character_bible().get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")},
+                    character_bible=video.load_character_bible(),
                                      tricks=tricks_on)
                 db.update_short_video(bid, bv, ba, bvtt, status='created')
                 st.session_state['last_render_srt'] = bvtt  # enables Retention Re-Cut
@@ -778,7 +774,7 @@ with st.expander("📦 Batch Mode — generate a week of videos in one run (asse
                 batch_status.markdown(f"✅ **Batch {i+1} done:** {os.path.basename(bv)}")
                 # conformance audit: surface issues per video (exact timestamps)
                 try:
-                    _bqc = video.run_qc_report(bv, bvtt, cosmic=(bg_style_val == "void"), watermark=bib_handle)
+                    _bqc = video.run_qc_report(bv, bvtt, cosmic=(bg_style_val == "void"), watermark='')
                     _bw = [l for l in _bqc if l.startswith("⚠") or l.startswith("❌")]
                     if _bw:
                         batch_status.warning("Batch QC: " + " · ".join(_bw[:3]))

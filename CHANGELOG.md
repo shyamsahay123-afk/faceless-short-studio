@@ -63,3 +63,6 @@
 * **UI Declutter (Simplification):** Completely removed the "Step 1.5 Generative AI Test Room" and the "Character Bible" sections from the UI to streamline the workflow as requested.
 * **Trend Board Randomization:** The Step 1 Trend Board no longer displays the same 5 static topics. It now dynamically rotates through a larger pool of 2026-relevant viral concepts, changing every hour.
 * **Voice UI Sync:** Updated the app's voice dropdown mapping to correctly sync with the new premium `en-GB-RyanNeural` default fallback voice.
+
+## v2.2.4 - 2026-08-31
+* **NameError Crash Fix:** Resolved a `NameError: name 'bib_enabled' is not defined` crash in the `create_hybrid_ai_video` and `run_qc_report` functions caused by deleting the Character Bible UI in v2.2.3. The compiler now safely loads the visual bible directly from disk without relying on active UI widgets.
