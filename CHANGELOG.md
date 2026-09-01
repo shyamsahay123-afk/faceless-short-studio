@@ -78,3 +78,6 @@
 
 ## v2.3.2 - 2026-08-31
 * **Audio Track Selection Bug:** Forced explicit track mapping (`-map 0:v:0 -map 1:a:0`) in the FFmpeg multiplexer. Previously, FFmpeg was silently selecting the empty audio track from the muted video file instead of the actual master audio file, resulting in completely muted outputs despite successful compiles.
+
+## v2.4.0 - 2026-08-31
+* **Force-Kill Common AI Voices:** Hard-overwrote the legacy `video_engine.py` ElevenLabs presets. The old Adam/Antoni IDs are permanently deleted. The system now correctly queries the elite Dan/Alex/Nichalia models.

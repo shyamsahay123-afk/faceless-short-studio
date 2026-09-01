@@ -1700,22 +1700,22 @@ def clean_script_for_speech(script_text):
 # style exaggeration 20%, speaker boost ON = the "human tone" that V1 never had.
 VOICE_PRESETS = {
     "Deep Narrator Male": {
-        "voice_id": "ErXwobaYiN019PkySvjV",          # Adam
+        "voice_id": "BHr135B5EUBtaWheVj8S",          # Dan (Elite Documentary)
         "settings": {"stability": 0.25, "similarity_boost": 0.85, "style": 0.35, "speaker_boost": True},
-        "speed": 0.92,   # GOONINGGNG delivery: slow + low = the "deep voice that came"
+        "speed": 0.95,
     },
     "Energetic Male": {
-        "voice_id": "pNInz6obpgDQGcFmaJgB",          # Antoni
-        "settings": {"stability": 0.40, "similarity_boost": 0.78, "style": 0.25, "speaker_boost": True},
+        "voice_id": "yl2ZDV1MzN4HbQJbMihG",          # Alex (Built for Shorts)
+        "settings": {"stability": 0.35, "similarity_boost": 0.80, "style": 0.40, "speaker_boost": True},
         "speed": 1.05,
     },
     "Warm Female": {
-        "voice_id": "EXAVITQu4vr4xnSDxMaL",          # Sarah
+        "voice_id": "XfNU2rGpBa01ckF309OY",          # Nichalia (Educational)
         "settings": {"stability": 0.38, "similarity_boost": 0.78, "style": 0.20, "speaker_boost": True},
         "speed": 1.0,
     },
     "Calm British Female": {
-        "voice_id": "nwTfqZTgqMn136RyYiYO",          # Alice
+        "voice_id": "pFZP5JQG7iQjIQuC4Bku",          # Lily (Placeholder)
         "settings": {"stability": 0.42, "similarity_boost": 0.75, "style": 0.15, "speaker_boost": True},
         "speed": 0.97,
     },
