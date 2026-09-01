@@ -3035,13 +3035,9 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
                     exp_gain = 1.0
             # v2: brighter blend (0.82) + lighter dark grade — clips must stay clearly visible
             scaled_sub = make_vertical_clip(sub_v, dark_blend=dark, exposure_gain=exp_gain, cosmic=cosmic)
-            # Zoom punch: subtle 6% push-in over the cut (motion = retention)
-            try:
-                if clip_dur > 0.5:
-                    d = clip_dur
-                    scaled_sub = scaled_sub.resized(lambda t, d=d: 1.0 + 0.06 * (min(t, d) / d))
-            except Exception:
-                pass
+            # User reported 'VIDEO RATIO' bug.
+            # The continuous zoom lambda is squashing and distorting the aspect ratio over time.
+            # Removed the 1.0 -> 1.06 dynamic resize to keep the 720x1280 ratio locked perfectly.
             if clip_mode == "blend" and se is not None:
                 try:
                     scaled_sub = se.set_opacity(scaled_sub, 0.82)

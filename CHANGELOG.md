@@ -44,3 +44,6 @@
 * **Pacing Infinity Loop Fix:** Fixed a major bug in the `pro_editor` cinematic rhythm engine where snapping to words could collapse the duration to zero, preventing cuts and resulting in a single clip playing for 60 seconds. Hard failsafes added to guarantee cuts advance.
 * **Caption `|` Eradication:** Added explicit stripping for the `|` character from subtitle JSON inputs to ensure no edge-tts metadata or LLM list separators visually appear on screen.
 * **Curiosity Card Purge:** Completely disabled the legacy "LIST SHOWN ALREADY THEN AGAIN LIST CAME" popup card. Lists will now only be presented organically via voice and B-roll as the user specifically requested.
+
+## v2.1.2 - 2026-08-31
+* **Video Ratio Bug (Aspect Distortion):** Removed the broken Ken Burns "continuous zoom" lambda function from the B-roll loader. It was stretching the pixels over time and breaking the 720x1280 frame bounds. The aspect ratio is now perfectly locked to 9:16 again.
