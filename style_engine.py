@@ -873,35 +873,10 @@ def daily_code(date_str=None):
 
 
 def make_outro_card(handle, code, accent="yellow", w=720, h=1280):
-    """GOONINGGNG outro (the last ~4s): near-black card, @handle centered,
-    'the next code is dropping' line, and CODE X-Y-Z bottom-left (B4 ritual)."""
-    img = Image.new("RGB", (w, h), (6, 6, 9))
-    d = ImageDraw.Draw(img)
-    rng = random.Random(99)
-    for _ in range(70):
-        x, y = rng.randint(0, w), rng.randint(0, h)
-        v = rng.randint(22, 64)
-        d.point((x, y), fill=(v, v, min(255, v + 8)))
-    accent_rgb = ACCENTS.get(accent, ACCENTS["yellow"])
-    handle_txt = str(handle or "").strip()
-    if not handle_txt.startswith("@"):
-        handle_txt = "@" + handle_txt
-    f = get_pil_font(58, bold=True, text=handle_txt)
-    tw, th, ox, oy = _measure_text(handle_txt, f, 3)
-    if tw > w - 80:   # long handle: shrink to fit the card
-        size = max(30, int(58 * (w - 80) / tw))
-        f = get_pil_font(size, bold=True, text=handle_txt)
-        tw, th, ox, oy = _measure_text(handle_txt, f, 3)
-    d.text(((w - tw) // 2 - ox, h // 2 - 110 - oy), handle_txt, font=f,
-           fill=(235, 238, 245), stroke_width=3, stroke_fill=(0, 0, 0))
-    f2 = get_pil_font(28, bold=False, text="x")
-    sub = "THE NEXT CODE IS DROPPING"
-    tw2, th2, ox2, oy2 = _measure_text(sub, f2, 0)
-    d.text(((w - tw2) // 2 - ox2, h // 2 + 30 - oy2), sub, font=f2, fill=(118, 124, 136))
-    f3 = get_pil_font(34, bold=True, text=str(code))
-    d.text((48, h - 150), f"CODE {code}", font=f3, fill=tuple(accent_rgb),
-           stroke_width=2, stroke_fill=(0, 0, 0))
-    return img
+    # OUTRO CARD DISABLED
+    # User requested no @watermark, and the AI Director handles looping now.
+    # An outro card breaks the seamless loop structure anyway.
+    return None
 
 
 def make_sigil_overlay(duration, seed=1):

@@ -3358,8 +3358,9 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         try:
             _handle = (channel_bible or {}).get("watermark", "")
             _code = se.daily_code() if se else "0-0-0"
-            _card = se.make_outro_card(_handle, _code, accent=style_accent)
-            extra_clips.append(ImageClip(np.array(_card)).with_start(duration - 4.0).with_duration(4.0))
+            _card = None # se.make_outro_card disabled to preserve loops
+            if _card is not None:
+                extra_clips.append(ImageClip(np.array(_card)).with_start(duration - 4.0).with_duration(4.0))
             try:
                 db_settings.set_setting("last_code", _code)
             except Exception:

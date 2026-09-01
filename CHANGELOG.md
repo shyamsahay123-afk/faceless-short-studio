@@ -47,3 +47,6 @@
 
 ## v2.1.2 - 2026-08-31
 * **Video Ratio Bug (Aspect Distortion):** Removed the broken Ken Burns "continuous zoom" lambda function from the B-roll loader. It was stretching the pixels over time and breaking the 720x1280 frame bounds. The aspect ratio is now perfectly locked to 9:16 again.
+
+## v2.1.3 - 2026-08-31
+* **Outro Card Purge:** Permanently deleted the 4-second "THE NEXT CODE IS DROPPING" black outro card. Not only did it contain the `@` watermark the user wanted removed, but a black outro completely destroyed the "Seamless Loop" psychology we implemented in the new AI Director scripts. The video now loops cleanly on B-roll.
