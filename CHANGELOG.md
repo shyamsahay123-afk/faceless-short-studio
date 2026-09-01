@@ -58,3 +58,8 @@
 
 ## v2.2.1 - 2026-08-31
 * **AI Data Passthrough Fix:** Fixed a critical data drop in the Batch Processor (`app.py`) and the CLI Autopilot (`daily.py`) where the AI Director's B-roll search queries were generated but never passed to the video engine, causing it to fall back to random words. B-roll logic is now fully linked across all execution modes.
+
+## v2.2.2 - 2026-08-31
+* **UI Declutter (Simplification):** Completely removed the "Step 1.5 Generative AI Test Room" and the "Character Bible" sections from the UI to streamline the workflow as requested.
+* **Trend Board Randomization:** The Step 1 Trend Board no longer displays the same 5 static topics. It now dynamically rotates through a larger pool of 2026-relevant viral concepts, changing every hour.
+* **Voice UI Sync:** Updated the app's voice dropdown mapping to correctly sync with the new premium `en-GB-RyanNeural` default fallback voice.
