@@ -66,3 +66,6 @@
 
 ## v2.2.4 - 2026-08-31
 * **NameError Crash Fix:** Resolved a `NameError: name 'bib_enabled' is not defined` crash in the `create_hybrid_ai_video` and `run_qc_report` functions caused by deleting the Character Bible UI in v2.2.3. The compiler now safely loads the visual bible directly from disk without relying on active UI widgets.
+
+## v2.2.5 - 2026-08-31
+* **Mute Bug Fix (Missing Voice):** The underlying video renderer library (MoviePy 2.x) was stripping the audio track during the final multi-layer composite assembly. Hard-coded the compiler to forcefully re-attach the master audio track directly to the final output file before encoding.

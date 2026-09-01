@@ -3394,11 +3394,16 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     
     # --- STRICT 59.5 SECOND TRIM (YouTube Shorts Compliance) ---
     final_comp = CompositeVideoClip([bg_clip] + text_clips + extra_clips)
+    
+    # CRITICAL AUDIO FIX: MoviePy 2.x CompositeVideoClip does NOT always inherit audio automatically.
+    # We must explicitly re-attach the mixed audio track to the final composition layer.
+    if bg_clip.audio is not None:
+        final_comp = final_comp.with_audio(bg_clip.audio)
+        
     if duration > 59.5:
         print(f"[Engine] WARNING: Raw duration {duration:.2f}s exceeds Shorts limit. Hard trimming to 59.5s.")
         final_comp = final_comp.subclipped(0, 59.5)
-        # MoviePy's subclip natively trims the audio attached to the composite!
-
+        
     final_comp.write_videofile(
 
         output_video_path, 
