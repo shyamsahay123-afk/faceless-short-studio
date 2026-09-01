@@ -81,3 +81,6 @@
 
 ## v2.4.0 - 2026-08-31
 * **Force-Kill Common AI Voices:** Hard-overwrote the legacy `video_engine.py` ElevenLabs presets. The old Adam/Antoni IDs are permanently deleted. The system now correctly queries the elite Dan/Alex/Nichalia models.
+
+## v2.5.0 - 2026-08-31
+* **Remote Git Sync Fix:** Resolved the user's missing `origin` remote config that was blocking them from pulling the final, working codebase.
