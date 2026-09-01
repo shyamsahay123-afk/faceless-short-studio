@@ -117,7 +117,7 @@ def publish_to_videos_repo(video_path, thumb_path, repo, token):
 
 
 VOICE_MAP = {
-    "en": ("Deep Narrator Male", "en-US-ChristopherNeural"),
+    "en": ("Deep Narrator Male", "en-GB-RyanNeural"),
     "hi": ("Deep Narrator Male", "hi-IN-MadhurNeural"),
 }
 

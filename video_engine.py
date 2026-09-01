@@ -1838,7 +1838,7 @@ def _sentence_to_word_cues(sentence_cues):
 
 
 # --- NATIVE PYTHON TTS GENERATOR ---
-def generate_tts_audio(text, voice_name="en-US-ChristopherNeural", output_basename="voice", eleven_key=None, voice_preset="Deep Narrator Male"):
+def generate_tts_audio(text, voice_name="en-GB-RyanNeural", output_basename="voice", eleven_key=None, voice_preset="Deep Narrator Male"):
     if eleven_key and eleven_key.strip():
         print(f"Calling premium ElevenLabs voiceover (V3, preset: {voice_preset})...")
         aud_path, s_path = generate_elevenlabs_audio(text, eleven_key, output_basename, voice_preset=voice_preset)
@@ -2198,10 +2198,10 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
     is_typewriter = "typewriter" in caption_theme
 
     if is_typewriter:
-        # GOONINGGNG captions: 3-word fragments, small white, no bounce,
-        # no color-coding, with a typewriter cursor bar
-        display_subs = split_subtitles_into_words(subtitles, words_per_clip=3)
-        actual_font_size = int(font_size * 0.72)
+        # User request: "WORDS PLACING WRONG, didnot edit it can be edited more professionally"
+        # 3 words is too chunky and wraps weirdly. 1-2 words looks much more professional and dynamic.
+        display_subs = split_subtitles_into_words(subtitles, words_per_clip=1)
+        actual_font_size = int(font_size * 0.90)  # Larger, more legible
     elif is_cinematic:
         # Reference #3 style: sentence-level phrases (3 words), no spring bounce,
         # calm gold/white — the narration stays the star
@@ -2659,7 +2659,7 @@ def log(msg):
 # ==============================================================================
 # 🧬 THE MASTER HYBRID VIDEO GENERATION PIPELINE 🧬
 # ==============================================================================
-def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-US-ChristopherNeural", font_color='yellow', **kwargs):
+def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voice_name="en-GB-RyanNeural", font_color='yellow', **kwargs):
     timestamp = int(time.time())
     output_video_path = os.path.join(VIDEO_DIR, f"short_{short_id}_{timestamp}.mp4")
     _render_t0 = time.time()

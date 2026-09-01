@@ -217,9 +217,7 @@ def render_text_image(text, font_size=80, color=(255, 255, 255),
     d.text((pad - off_x, pad - off_y),
            text, font=font, fill=color + (255,), stroke_width=outline_width, stroke_fill=outline_color + (255,))
     if cursor:
-        # typewriter bar: a white block just past the last glyph
-        x0 = pad - off_x + tw + 3
-        d.rectangle([x0, pad - off_y + 2, x0 + 7, pad - off_y + th - 4], fill=color + (255,))
+        pass # User hates the cursor | symbol, disabled permanently.
     return img
 
 
