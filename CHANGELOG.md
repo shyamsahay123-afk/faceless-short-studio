@@ -72,3 +72,6 @@
 
 ## v2.3.0 - 2026-08-31
 * **Bulletproof Audio Multiplexer:** Completely bypassed MoviePy's broken audio composite writer. The engine now exports the video and audio tracks separately, and uses raw FFmpeg to merge them flawlessly. The voice and music are 100% guaranteed to be in the final MP4.
+
+## v2.3.1 - 2026-08-31
+* **Windows Mute Video Fix:** The v2.3.0 raw FFmpeg multiplexer failed on Windows machines because the system PATH did not include `ffmpeg`. Switched the multiplexer to use the embedded `imageio_ffmpeg` binary, guaranteeing successful audio merges across all operating systems without requiring users to install FFmpeg manually.
