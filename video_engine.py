@@ -3426,8 +3426,10 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
     import subprocess
     import imageio_ffmpeg
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    # Map video from input 0, audio from input 1 explicitly to avoid silent track selection
     subprocess.run([
         ffmpeg_exe, "-y", "-i", temp_vid, "-i", temp_aud, 
+        "-map", "0:v:0", "-map", "1:a:0",
         "-c:v", "copy", "-c:a", "aac", output_video_path
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     

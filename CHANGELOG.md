@@ -75,3 +75,6 @@
 
 ## v2.3.1 - 2026-08-31
 * **Windows Mute Video Fix:** The v2.3.0 raw FFmpeg multiplexer failed on Windows machines because the system PATH did not include `ffmpeg`. Switched the multiplexer to use the embedded `imageio_ffmpeg` binary, guaranteeing successful audio merges across all operating systems without requiring users to install FFmpeg manually.
+
+## v2.3.2 - 2026-08-31
+* **Audio Track Selection Bug:** Forced explicit track mapping (`-map 0:v:0 -map 1:a:0`) in the FFmpeg multiplexer. Previously, FFmpeg was silently selecting the empty audio track from the muted video file instead of the actual master audio file, resulting in completely muted outputs despite successful compiles.
