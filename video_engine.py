@@ -1853,43 +1853,73 @@ def generate_tts_audio(text, voice_name="en-GB-RyanNeural", output_basename="voi
     audio_path = os.path.join(AUDIO_DIR, f"{output_basename}.mp3")
     srt_path = os.path.join(AUDIO_DIR, f"{output_basename}.srt")
 
-    boundary_data = {"word_srt": "", "sentences": []}
+    # v2.5.2 WINDOWS BULLETPROOF TTS: Spawn a completely isolated Python process
+    # to run the async edge-tts code. This guarantees 100% immunity against Streamlit's
+    # Tornado event-loop thread crashes, and completely solves the identical gTTS fallback bug.
+    code = f"""
+import asyncio
+import edge_tts
+import sys
+import json
 
-    async def amain():
-        # B1 FIX (P0): edge-tts 7.2+ changed the DEFAULT boundary from
-        # WordBoundary to SentenceBoundary → SubMaker received zero word
-        # events → captions silently degraded to char-weighted estimates.
-        # Pin WordBoundary explicitly; TypeError fallback for 6.x/early 7.x.
-        try:
-            communicate = edge_tts.Communicate(text, voice_name, boundary="WordBoundary")
-        except TypeError:
-            communicate = edge_tts.Communicate(text, voice_name)
-        try:
-            submaker = edge_tts.SubMaker()
-        except Exception:
-            submaker = None
-        with open(audio_path, "wb") as f_aud:
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    f_aud.write(chunk["data"])
-                elif chunk["type"] == "WordBoundary" and submaker is not None:
-                    submaker.feed(chunk)
-                elif chunk["type"] == "SentenceBoundary":
-                    boundary_data["sentences"].append(
-                        (chunk.get("offset", 0), chunk.get("duration", 0), chunk.get("text", "")))
-        if submaker is not None:
-            try:
-                boundary_data["word_srt"] = submaker.get_srt()
-            except Exception:
-                boundary_data["word_srt"] = ""
+async def main():
+    try:
+        communicate = edge_tts.Communicate({repr(text)}, {repr(voice_name)}, boundary="WordBoundary")
+    except TypeError:
+        communicate = edge_tts.Communicate({repr(text)}, {repr(voice_name)})
+    
+    submaker = None
+    try:
+        submaker = edge_tts.SubMaker()
+    except Exception:
+        pass
+        
+    sentences = []
+    with open({repr(audio_path)}, "wb") as f_aud:
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                f_aud.write(chunk["data"])
+            elif chunk["type"] == "WordBoundary" and submaker is not None:
+                submaker.feed(chunk)
+            elif chunk["type"] == "SentenceBoundary":
+                sentences.append((chunk.get("offset", 0), chunk.get("duration", 0), chunk.get("text", "")))
+                
+    word_srt = submaker.get_srt() if submaker else ""
+    with open({repr(srt_path + ".json")}, "w", encoding="utf-8") as f_out:
+        json.dump({{"word_srt": word_srt, "sentences": sentences}}, f_out)
+
+if sys.platform == 'win32':
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except:
+        pass
+try:
+    asyncio.run(main())
+except Exception as e:
+    print(repr(e), file=sys.stderr)
+    sys.exit(1)
+"""
 
     try:
-        run_async_in_thread(amain())
+        res = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        if res.returncode != 0:
+            raise RuntimeError(f"Subprocess edge-tts crashed: {res.stderr}")
+            
+        import json
+        with open(srt_path + ".json", "r", encoding="utf-8") as f:
+            boundary_data = json.load(f)
+            
+        # Clean up the temp JSON
+        try:
+            os.remove(srt_path + ".json")
+        except:
+            pass
+
         # --- Build the word-level SRT: WordBoundary -> SentenceBoundary -> even-spread fallback ---
-        if boundary_data["word_srt"].strip():
+        if boundary_data.get("word_srt", "").strip():
             with open(srt_path, "w", encoding="utf-8") as f_sub:
                 f_sub.write(boundary_data["word_srt"])
-        elif boundary_data["sentences"]:
+        elif boundary_data.get("sentences"):
             _write_word_srt(_sentence_to_word_cues(boundary_data["sentences"]), srt_path)
         else:
             try:

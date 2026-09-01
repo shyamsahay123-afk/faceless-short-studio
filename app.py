@@ -299,7 +299,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.5.1</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.5.2</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
@@ -456,7 +456,7 @@ ai_voice_label = col_s1.selectbox("🔊 Narrator Voice (V3 Tones + Hindi)", list
 voice_code_map = {
     "Deep Narrator Male": "en-GB-RyanNeural", 
     "Energetic Male": "en-US-GuyNeural",
-    "Warm Female": "en-US-JaneNeural", 
+    "Warm Female": "en-US-JennyNeural", 
     "Calm British Female": "en-GB-SoniaNeural",
     "Hindi Male": "hi-IN-MadhurNeural",
     "Hindi Female": "hi-IN-SwaraNeural",

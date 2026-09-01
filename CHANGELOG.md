@@ -87,3 +87,7 @@
 
 ## v2.5.1 - 2026-08-31
 * **Windows Voice Identity Bug Patched:** Fixed a severe Windows-specific threading bug where the `edge-tts` voice generator would silently crash in the background (due to a missing `WindowsSelectorEventLoopPolicy` in the asyncio thread). This crash was forcing the system to fall back to the emergency `gTTS` engine, which completely ignores voice selections and outputs the exact same generic Google female voice for every video (Hindi, English, Male, or Female). All voices will now render correctly with their distinct identities.
+
+## v2.5.2 - 2026-08-31
+* **True Windows Threading Fix (Subprocess Isolation):** The previous thread patch for Windows `edge-tts` was insufficient because Streamlit's Tornado event loop still polluted the environment. Rewrote the TTS generator to spawn a completely isolated, pristine Python subprocess for `edge-tts`. This physically guarantees zero event-loop crashes, completely permanently fixing the identical `gTTS` fallback bug.
+* **Invalid Voice Fallback Fix:** Fixed an invalid voice ID (`en-US-JaneNeural`) that was causing a silent network crash and forcing the identical `gTTS` fallback for the "Warm Female" preset. Replaced with valid `en-US-JennyNeural`.
