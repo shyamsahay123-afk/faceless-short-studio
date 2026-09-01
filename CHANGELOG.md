@@ -27,3 +27,11 @@
 * **YouTube Shorts Compliance Check:** Added a strict 59.5-second time limit logic. The engine will now forcefully trim any video exceeding this length to guarantee Shorts feed algorithmic compliance.
 * **B-Roll Variety Engine (The 'Moon Problem'):** Implemented a state-aware category tracker in `video_engine.py` that bans back-to-back shots of similar cosmic clips (no more three galaxies in a row).
 * **PC Watchdog:** Rewrote the generic try/except handler in `daily.py`. It now captures the exact trace of failures (network drops, API quota limits, memory limits), halts the loop immediately instead of wasting PC hours, and generates a massive `CRASH_REPORT.txt`.
+
+## v2.0.2 - 2026-08-31
+* **Caption UI Fix:** Removed the pipe `|` cursor from the typewriter effect.
+* **Kinetic Typography:** Upgraded captions from chunky 3-word blocks to professional 1-word dynamic pop-ins.
+* **Emoji/Sticker Ban:** Aggressive regex stripping added to captions to prevent the "sun sticker" rendering bug.
+* **Pacing Engine Fix:** Forced the `pro_editor` to hard-cut every 4.0 - 5.5 seconds. This completely solves the "entire video is one clip" bug caused by missing script punctuation.
+* **B-Roll Fallback Guard:** If Pexels fails to find an abstract concept like "infinity", it no longer leaves a black screen. It immediately grabs a guaranteed generic cosmic aesthetic clip.
+* **Voice Engine Default:** Changed the free fallback voice from the highly robotic `en-US-Christopher` to `en-GB-RyanNeural` (high-quality British documentary tone).
