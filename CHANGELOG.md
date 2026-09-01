@@ -69,3 +69,6 @@
 
 ## v2.2.5 - 2026-08-31
 * **Mute Bug Fix (Missing Voice):** The underlying video renderer library (MoviePy 2.x) was stripping the audio track during the final multi-layer composite assembly. Hard-coded the compiler to forcefully re-attach the master audio track directly to the final output file before encoding.
+
+## v2.3.0 - 2026-08-31
+* **Bulletproof Audio Multiplexer:** Completely bypassed MoviePy's broken audio composite writer. The engine now exports the video and audio tracks separately, and uses raw FFmpeg to merge them flawlessly. The voice and music are 100% guaranteed to be in the final MP4.

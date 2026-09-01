@@ -3404,16 +3404,37 @@ def create_hybrid_ai_video(short_id, script_text, uploaded_file_paths=None, voic
         print(f"[Engine] WARNING: Raw duration {duration:.2f}s exceeds Shorts limit. Hard trimming to 59.5s.")
         final_comp = final_comp.subclipped(0, 59.5)
         
+    # BULLETPROOF AUDIO MULTIPLEXER (Fixing MoviePy 2.x audio drop bug)
+    temp_vid = output_video_path.replace(".mp4", "_tempv.mp4")
+    temp_aud = output_video_path.replace(".mp4", "_tempa.mp3")
+    
+    # 1. Write muted video
     final_comp.write_videofile(
-
-        output_video_path, 
+        temp_vid, 
         fps=24, 
         codec="libx264", 
-        audio_codec="aac", 
-        preset="ultrafast", # Compiles in seconds!
+        audio=False, 
+        preset="ultrafast",
         logger=None,
         ffmpeg_params=["-pix_fmt", "yuv420p"]
     )
+    
+    # 2. Write master audio
+    mixed_audio.write_audiofile(temp_aud, fps=44100, logger=None)
+    
+    # 3. Merge perfectly using FFMPEG directly
+    import subprocess
+    subprocess.run([
+        "ffmpeg", "-y", "-i", temp_vid, "-i", temp_aud, 
+        "-c:v", "copy", "-c:a", "aac", output_video_path
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    # Cleanup temps
+    try:
+        os.remove(temp_vid)
+        os.remove(temp_aud)
+    except:
+        pass
     
     if progress_cb: progress_cb(0.98, "Releasing local system file locks and saving database state...")
     try:

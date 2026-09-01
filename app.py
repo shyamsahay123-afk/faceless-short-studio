@@ -299,7 +299,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.2.5</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.3.0</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
@@ -453,10 +453,17 @@ col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
 # (Write/paste the script in Hindi, pick a Hindi voice, render — done.)
 _HINDI_VOICES = ["🇮🇳 Hindi Male (Madhur)", "🇮🇳 Hindi Female (Swara)"]
 ai_voice_label = col_s1.selectbox("🔊 Narrator Voice (V3 Tones + Hindi)", list(video.VOICE_PRESETS.keys()) + _HINDI_VOICES)
-voice_code = {"Deep Narrator Male": "en-US-ChristopherNeural", "Energetic Male": "en-US-GuyNeural",
-              "Warm Female": "en-US-AriaNeural", "Calm British Female": "en-GB-SoniaNeural",
-              "🇮 Hindi Male (Madhur)": "hi-IN-MadhurNeural",
-              "🇮🇳 Hindi Female (Swara)": "hi-IN-SwaraNeural"}[ai_voice_label]
+voice_code_map = {
+    "Deep Narrator Male": "en-GB-RyanNeural", 
+    "Energetic Male": "en-US-GuyNeural",
+    "Warm Female": "en-US-JaneNeural", 
+    "Calm British Female": "en-GB-SoniaNeural",
+    "Hindi Male": "hi-IN-MadhurNeural",
+    "Hindi Female": "hi-IN-SwaraNeural",
+    "🇮🇳 Hindi Male (Madhur)": "hi-IN-MadhurNeural",
+    "🇮🇳 Hindi Female (Swara)": "hi-IN-SwaraNeural"
+}
+voice_code = voice_code_map.get(ai_voice_label, "en-GB-RyanNeural")
 
 pacing_label = col_s2.selectbox("⏱️ Video Pacing (now LIVE)", [
     "🌑 Deep Cosmic (4-9s holds — GOONINGGNG)",
