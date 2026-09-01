@@ -299,7 +299,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.2.2</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.2.3</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
@@ -329,39 +329,6 @@ for idx, trend in enumerate(trending_concepts):
             st.session_state['topic_override'] = trend
             st.rerun()
 
-# --- NEW STUNNING GENERATIVE AI TEST ROOM (THE IMPOSSIBLE PROMPT PROOVER!) ---
-st.write("")
-st.markdown("### 🧪 Step 1.5: Generative AI Test Room (Impossible Prompts)")
-st.write("How do you prove that your AI is drawing a completely unique video from scratch rather than just searching Google? **Try an 'Impossible Prompt'!** Standard stock databases only have real-world videos. They do *not* have sci-fi or surreal videos. Select a prompt below, choose B-Roll Source: **Hugging Face AI** in Step 3, and watch the AI draw the scene in seconds!")
-
-with st.expander("🧪 Open Generative AI Test Lab", expanded=False):
-    col_t1, col_t2 = st.columns(2)
-    with col_t1:
-        st.markdown("**1. Surreal Sci-Fi Concept**")
-        st.write("*Prompt:* `A glowing neon astronaut riding a pink horse on Mars, vertical`")
-        if st.button("🔌 Load Sci-Fi Prompt", type="secondary"):
-            st.session_state['topic_override'] = "glowing neon astronaut riding a pink horse on Mars, vertical"
-            st.session_state['b_roll_override'] = "🤖 True AI Generated (Hugging Face - Free)"
-            st.rerun()
-            
-        st.markdown("**2. Aesthetic Fantasy Concept**")
-        st.write("*Prompt:* `A neon-purple human brain floating inside a clear glass jar, dark room`")
-        if st.button("🔌 Load Fantasy Prompt", type="secondary"):
-            st.session_state['topic_override'] = "neon-purple human brain floating inside a clear glass jar, dark room"
-            st.session_state['b_roll_override'] = "🤖 True AI Generated (Hugging Face - Free)"
-            st.rerun()
-            
-    with col_t2:
-        st.markdown("**3. Cute Surreal Concept**")
-        st.write("*Prompt:* `A cute fluffy orange cat wearing a miniature medieval helmet writing on computer`")
-        if st.button("🔌 Load Cute Prompt", type="secondary"):
-            st.session_state['topic_override'] = "cute fluffy orange cat wearing a miniature medieval helmet writing on computer"
-            st.session_state['b_roll_override'] = "🤖 True AI Generated (Hugging Face - Free)"
-            st.rerun()
-
-st.divider()
-
-# ------------------------------------------------------------------------------
 # STEP 2: CONCEPT PROMPT & INTERACTIVE AI SCRIPT EDITOR
 # ------------------------------------------------------------------------------
 st.subheader("✍️ Step 2: Prompt & AI Script Editor")
