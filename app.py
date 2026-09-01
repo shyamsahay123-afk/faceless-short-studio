@@ -196,14 +196,22 @@ def display_status_badge(status):
 
 # --- REAL-TIME GOOGLE & YOUTUBE SHORTS TREND BOARD CRAWLER ---
 def fetch_trending_shorts_concepts():
-    base_trends = [
+    import random
+    import time
+    all_trends = [
         "Why the Top 1% Use Dopamine Fasting to Build Unshakeable Focus",
         "The Dark Psychology of the 'Pavlov Effect' (How to brainwash yourself to work)",
         "The Silent Morning Rule: Why high-performers speak to no-one before 9 AM",
         "The Neuroscience of Procrastination (Why willpower is a complete lie)",
         "The Bizarre '3-Second Rule' to Eliminate Social Anxiety Instantly",
-        "Why Intelligent People Struggle to Stay Consistent (And the exact cure)"
+        "Why Intelligent People Struggle to Stay Consistent (And the exact cure)",
+        "The 'Ghost Effect' Trigger (Why ignoring them makes them obsessed)",
+        "The Zeigarnik Trap: Why you remember unfinished tasks forever",
+        "The 90-Minute Focus Protocol That Destroys Burnout",
+        "Why your brain protects you from success (The Comfort Zone Trap)"
     ]
+    random.seed(int(time.time() // 3600)) # Changes every hour
+    base_trends = random.sample(all_trends, 5)
     try:
         r = requests.get("https://trends.google.com/trends/trendingsearches/daily/rss?geo=US", timeout=4)
         if r.status_code == 200:
@@ -591,22 +599,6 @@ sfx_level = st.slider("🔊 SFX Level (whole sound layer: hits, whooshes, ticks)
 tricks_on = st.toggle("🧠 Psychology Tricks (named secret + comment bait, auto-rotated)", value=True,
                       help="Every video gets one named secret; a comment bait rotates (open question / hidden detail / debate split); one planted flaw per ~10 videos. Spec: psychology_tricks.md")
 
-# PIECE 4 — CHARACTER BIBLE (the channel's locked visual identity)
-st.markdown("#### 👤 Character Bible (locked visual identity)")
-st.caption("One description + one fixed seed = the SAME look in every video. Set it once — video #50 looks like video #1.")
-bible = video.load_character_bible()
-col_b1, col_b2, col_b3 = st.columns([2, 3, 1])
-bib_enabled = col_b1.toggle("Character bible ON", value=bible.get("enabled", True))
-bib_name = col_b1.text_input("Character name", value=bible.get("name", "The Narrator"))
-bib_desc = col_b2.text_area("Character description (locked in every AI image)", value=bible.get("description", ""))
-bib_seed = col_b3.number_input("Seed (locked)", min_value=1, max_value=9999999, value=int(bible.get("seed", 421337)))
-# Watermark lock removed as requested
-bib_handle = "" 
-if st.button("💾 Save Character Bible", use_container_width=False):
-    video.save_character_bible({"enabled": bib_enabled, "name": bib_name, "description": bib_desc, "seed": int(bib_seed),
-                                "watermark": bib_handle,
-                                "style_suffix": bible.get("style_suffix", "dark cinematic atmosphere, moody cinematic lighting, 8k, photorealistic, vertical 9:16 composition")})
-    st.success("Bible saved — every future AI image uses this locked identity.")
 
 st.divider()
 
