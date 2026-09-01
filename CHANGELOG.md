@@ -55,3 +55,6 @@
 * **Duplicate Script Fix:** The legacy script template engine was caching the topic seed, causing identical topics to output identical scripts. Seed generation now includes a time hash so it never repeats.
 * **Elite Voice Upgrade:** Stripped out the overused, common AI voices (Adam/Antoni) and replaced the ElevenLabs presets with the highest-converting 2026 Faceless voices: Dan (Documentary), Alex (Shorts Energy), and Nichalia (Educational). 
 * **Professional Captions by Default:** Switched the default app and daily autopilot styling from basic "Typewriter" to "Hormozi", bringing professional, color-coded kinetic typography natively to all exports.
+
+## v2.2.1 - 2026-08-31
+* **AI Data Passthrough Fix:** Fixed a critical data drop in the Batch Processor (`app.py`) and the CLI Autopilot (`daily.py`) where the AI Director's B-roll search queries were generated but never passed to the video engine, causing it to fall back to random words. B-roll logic is now fully linked across all execution modes.

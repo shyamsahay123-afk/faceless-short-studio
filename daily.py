@@ -132,7 +132,7 @@ def render_one(topic, st, args):
 
     # 2) SCRIPT (hook-score gated: regenerates weak hooks)
     t0 = time.time()
-    title, script, tags, trigger, hook_score = generate_script_with_score(
+    title, script, tags, trigger_data, hook_score = generate_script_with_score(
         topic, st["topic_style"], min_score=int(st["hook_min_score"]), tries=6)
     if title == "Safety Warning":
         print("Blocked by safety filter — skipping this topic.")
@@ -146,7 +146,7 @@ def render_one(topic, st, args):
     if not channels:
         db.add_channel("My Faceless Empire", "Self Improvement", "10k")
         channels = db.get_all_channels()
-    short_id = db.add_short(channels[0][0], title, script, trigger,
+    short_id = db.add_short(channels[0][0], title, script, "AI Director" if isinstance(trigger_data, dict) else trigger_data,
                             f"{title}\n\nDaily autopilot generated.", tags)
     print(f"[3/6] Saved to database (id {short_id})")
 
@@ -177,6 +177,7 @@ def render_one(topic, st, args):
             sfx_level=float(st["sfx_level"]),
             pacing=st.get("pacing", "cinematic"),
             character_bible=_bible,
+            ai_data=trigger_data if isinstance(trigger_data, dict) else None,
         )
 
     except Exception as e:

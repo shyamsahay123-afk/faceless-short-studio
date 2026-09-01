@@ -291,7 +291,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.1.3</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.2.1</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
@@ -782,7 +782,8 @@ with st.expander("📦 Batch Mode — generate a week of videos in one run (asse
                 _bar.progress(p)
                 _st.markdown(f"**Batch {i+1}:** {t} ... **{int(p*100)}%**")
             try:
-                btitle, bscript, btags, btrigger = auto_generate_script_local(btopic, style_choice)
+                btitle, bscript, btags, btrigger_data = auto_generate_script_local(btopic, style_choice)
+                btrigger = 'AI Director' if isinstance(btrigger_data, dict) else btrigger_data
                 all_ch = db.get_all_channels()
                 if not all_ch:
                     db.add_channel("My Faceless Empire", "Self Improvement", "10k")
@@ -797,11 +798,12 @@ with st.expander("📦 Batch Mode — generate a week of videos in one run (asse
                     progress_callback=batch_progress,
                     caption_style=caption_style_code,
                     cut_duration=cut_duration_val,
-                pacing=pacing_code,
+                    pacing=pacing_code,
                     b_roll_source=b_roll_source_val,
                     custom_scenarios=[],
                     meme_sfx_name="None",
                     hf_token=huggingface_token,
+                    ai_data=btrigger_data if isinstance(btrigger_data, dict) else None,
                     style_bg=bg_style_val,
                     style_accent=accent_val,
                     clip_mode=clip_mode_val,
