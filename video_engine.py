@@ -2319,7 +2319,7 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
                     color=tuple(c),
                     outline_color=(0, 0, 0),
                     outline_width=stroke_width + 1,
-                    cursor=is_typewriter,
+                    cursor=False,
                 )
                 txt_clip = ImageClip(np.array(cap_img), transparent=True)
             except Exception as cap_e:

@@ -762,46 +762,10 @@ def build_elite_text_layer(script_text, vtt_subs, duration, accent="yellow",
     clips = []
     sfx_events = []
 
-    # ---- 1. STACKED HOOK (0 - hook_hold), top third, staggered pop ----
-    hook_lines = parse_hook_lines(script_text)[:3]
-    if hook_style == "stack_contrast" and hook_lines:
-        # GOONINGGNG hook (measured from ref_video3):
-        # line 1 SMALL in the accent color, remaining lines HUGE in white.
-        # "WHAT'S THE" (gold ~44) / "MOST" (white ~108)
-        y_pos_sc = {1: [300], 2: [210, 350], 3: [170, 300, 445]}
-        for i, line in enumerate(hook_lines):
-            try:
-                if i == 0:
-                    size, color = 44, accent_rgb   # kicker line: small gold
-                else:
-                    size = fit_font_size(line.upper(), 108, 660, 7)
-                    color = (255, 255, 255)        # big line(s): white (ref: "MOST")
-                img = render_text_image(line.upper(), font_size=size,
-                                        color=color, outline_width=7)
-                start = 0.06 + i * 0.18
-                hold = hook_hold - start + 0.3
-                c = make_text_pop_clip(img, start, ("center", y_pos_sc.get(len(hook_lines), [300])[i]), hold)
-                clips.append(c)
-            except Exception as e:
-                print(f"[StyleEngine] hook line failed: {e}")
-    else:
-        # uniform stacked lines (original elite style), accent on last
-        common_size = 84
-        for line in hook_lines:
-            common_size = min(common_size, fit_font_size(line.upper(), 84, 660, 7))
-        y_map = {1: [170], 2: [150, 290], 3: [130, 265, 400]}
-        y_positions = y_map.get(len(hook_lines), [130, 265, 400])
-        for i, line in enumerate(hook_lines):
-            try:
-                color = accent_rgb if i == len(hook_lines) - 1 else (255, 255, 255)
-                img = render_text_image(line.upper(), font_size=common_size,
-                                        color=color, outline_width=7)
-                start = 0.06 + i * 0.16
-                hold = hook_hold - start + 0.2
-                c = make_text_pop_clip(img, start, ("center", y_positions[i]), hold)
-                clips.append(c)
-            except Exception as e:
-                print(f"[StyleEngine] hook line failed: {e}")
+    # ---- 1. STACKED HOOK DISABLED ----
+    # User feedback: The static stacked hook clashes with the dynamic 1-word captions 
+    # and clutters the screen. We now rely exclusively on the high-retention dynamic captions.
+    pass
     # v2: soft hook hit (the old 0.5 volume startle was a skip trigger)
     sfx_events.append(("__hit__", 0.42, 0.32))
 

@@ -35,3 +35,7 @@
 * **Pacing Engine Fix:** Forced the `pro_editor` to hard-cut every 4.0 - 5.5 seconds. This completely solves the "entire video is one clip" bug caused by missing script punctuation.
 * **B-Roll Fallback Guard:** If Pexels fails to find an abstract concept like "infinity", it no longer leaves a black screen. It immediately grabs a guaranteed generic cosmic aesthetic clip.
 * **Voice Engine Default:** Changed the free fallback voice from the highly robotic `en-US-Christopher` to `en-GB-RyanNeural` (high-quality British documentary tone).
+
+## v2.1.0 - 2026-08-31
+* **Duplicate Captions Eradicated:** Permanently disabled the legacy static stacked hook generator. The screen will no longer be cluttered with two different text engines fighting for attention. The dynamic 1-word captions now own the screen.
+* **Cursor Hard-Kill:** Hardcoded the caption compiler to bypass the `|` cursor injection completely, fixing the bug where the pipe symbol attached itself to words.
