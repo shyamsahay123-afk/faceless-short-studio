@@ -50,3 +50,8 @@
 
 ## v2.1.3 - 2026-08-31
 * **Outro Card Purge:** Permanently deleted the 4-second "THE NEXT CODE IS DROPPING" black outro card. Not only did it contain the `@` watermark the user wanted removed, but a black outro completely destroyed the "Seamless Loop" psychology we implemented in the new AI Director scripts. The video now loops cleanly on B-roll.
+
+## v2.2.0 - 2026-08-31
+* **Duplicate Script Fix:** The legacy script template engine was caching the topic seed, causing identical topics to output identical scripts. Seed generation now includes a time hash so it never repeats.
+* **Elite Voice Upgrade:** Stripped out the overused, common AI voices (Adam/Antoni) and replaced the ElevenLabs presets with the highest-converting 2026 Faceless voices: Dan (Documentary), Alex (Shorts Energy), and Nichalia (Educational). 
+* **Professional Captions by Default:** Switched the default app and daily autopilot styling from basic "Typewriter" to "Hormozi", bringing professional, color-coded kinetic typography natively to all exports.
