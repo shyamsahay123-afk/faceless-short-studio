@@ -787,44 +787,7 @@ def build_elite_text_layer(script_text, vtt_subs, duration, accent="yellow",
 
     # ---- 3. CURIOSITY CARD (redacted) + REVEAL ----
     if show_card and card_items:
-        # PRO TIMING: the card is a CLIMAX device — appears at 30-45% of the
-        # video, reveals at 60-70%. Never in the first third (that front-loads
-        # the peak and leaves the back half flat).
-        card_start = max(3.4, (timed_beats[0][0] if timed_beats else 3.4), duration * 0.30)
-        card_start = min(card_start, duration - 9.0)
-        reveal_t = max(card_start + 2.2, min(duration * 0.62, card_start + 4.5))
-        reveal_t = min(reveal_t, duration - 4.5)
-        try:
-            card = make_curiosity_card("THE LIST", card_items, redact=True, accent=accent)
-            c = make_text_pop_clip(Image.fromarray(np.array(card)), card_start, ("center", 640),
-                                   max(1.2, reveal_t - card_start))
-            clips.append(c)
-            sfx_events.append(("__whoosh__", card_start, 0.30))
-            # The Subconscious Audio Anchor (Riser before climax)
-            sfx_events.append(("__riser__", max(0, reveal_t - 2.0), 0.25))
-        except Exception as e:
-            print(f"[StyleEngine] card failed: {e}")
-        try:
-            # SEQUENTIAL REVEAL (Fixing the Curiosity Killer)
-            # Instead of showing the full list at once, we reveal it one by one.
-            stage_dur = 2.6 / len(card_items[:3]) if card_items else 2.6
-            for i in range(len(card_items[:3])):
-                stage_card = make_curiosity_card("THE LIST", card_items, redact=False, accent=accent, visible_count=i+1)
-                start_time = reveal_t + (i * stage_dur)
-                hold_time = stage_dur if i < len(card_items[:3]) - 1 else 1.2
-                
-                c_stage = make_text_pop_clip(Image.fromarray(np.array(stage_card)), start_time,
-                                        ("center", 640), hold_time)
-                clips.append(c_stage)
-                # Play a 'pop' sound for every new item on the list
-                sfx_events.append(("__ding__", start_time, 0.30))
-                
-            # The heavy impact hits on the final item
-            sfx_events.append(("__impact__", reveal_t + (len(card_items[:3])-1)*stage_dur, 0.40))
-        except Exception as e:
-            print(f"[StyleEngine] reveal failed: {e}")
-        # Remove the arrow entirely. The giant red scribble is enough contrast,
-        # and the yellow arrow pointing randomly into space breaks the luxury feel.
+        # LIST CARD COMPLETELY DISABLED PER USER REQUEST
         pass
 
     # ---- 4. STAT PROOF CARD (if script has a % number) — shown DURING the hook,

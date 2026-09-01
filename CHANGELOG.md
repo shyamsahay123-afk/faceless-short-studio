@@ -39,3 +39,8 @@
 ## v2.1.0 - 2026-08-31
 * **Duplicate Captions Eradicated:** Permanently disabled the legacy static stacked hook generator. The screen will no longer be cluttered with two different text engines fighting for attention. The dynamic 1-word captions now own the screen.
 * **Cursor Hard-Kill:** Hardcoded the caption compiler to bypass the `|` cursor injection completely, fixing the bug where the pipe symbol attached itself to words.
+
+## v2.1.1 - 2026-08-31
+* **Pacing Infinity Loop Fix:** Fixed a major bug in the `pro_editor` cinematic rhythm engine where snapping to words could collapse the duration to zero, preventing cuts and resulting in a single clip playing for 60 seconds. Hard failsafes added to guarantee cuts advance.
+* **Caption `|` Eradication:** Added explicit stripping for the `|` character from subtitle JSON inputs to ensure no edge-tts metadata or LLM list separators visually appear on screen.
+* **Curiosity Card Purge:** Completely disabled the legacy "LIST SHOWN ALREADY THEN AGAIN LIST CAME" popup card. Lists will now only be presented organically via voice and B-roll as the user specifically requested.

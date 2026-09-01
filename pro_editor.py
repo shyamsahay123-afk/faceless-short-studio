@@ -179,9 +179,20 @@ def build_scene_rhythm(beat_map, vtt_subs, duration, seed=7, pacing="cinematic")
             fast_streak = 0
         L = min(L, 2.5 * scale)                    # HARD CAP: no stall > 2.5s (scaled)
         end = min(t + L, duration)
-        end = snap_to_word(end, vtt_subs)          # cut ON the spoken word
+        best_e = snap_to_word(end, vtt_subs)          # cut ON the spoken word
+        
+        # Failsafe: if snapping broke the duration or moved backwards, ignore snapping
+        if best_e <= t + 0.5:
+            end = min(t + L, duration)
+        else:
+            end = best_e
+            
         if end - t >= 0.45:
             boundaries.append((t, end))
+        else:
+            # Force advance to prevent infinite loop
+            boundaries.append((t, min(t + 1.0, duration)))
+            end = min(t + 1.0, duration)
         t = end
     if not boundaries:
         boundaries = [(0.0, duration)]
