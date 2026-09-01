@@ -60,11 +60,15 @@ def run_async_in_thread(coro):
     exception = []
     def worker():
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            res = loop.run_until_complete(coro)
+            import sys
+            import asyncio
+            if sys.platform == 'win32':
+                try:
+                    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+                except:
+                    pass
+            res = asyncio.run(coro)
             result.append(res)
-            loop.close()
         except Exception as e:
             exception.append(e)
             
@@ -1908,7 +1912,9 @@ def generate_tts_audio(text, voice_name="en-GB-RyanNeural", output_basename="voi
         print(f"Native edge-tts failed: {e}. Falling back to gTTS.")
         try:
             from gtts import gTTS
-            gTTS(text=text, lang='en').save(audio_path)
+            # Fix gTTS fallback playing the exact same english female voice for every option
+            lang_code = 'hi' if 'hi-IN' in voice_name else 'en'
+            gTTS(text=text, lang=lang_code).save(audio_path)
             # B4 FIX (P0): NEVER return srt=None. parse_vtt(None)=[] silently
             # killed the ENTIRE caption/beat/SFX/broll-sync layer. gTTS gives
             # no word timings, so build a char-weighted word-level SRT — the
