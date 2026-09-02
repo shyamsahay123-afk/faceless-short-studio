@@ -13,3 +13,5 @@ requests>=2.31,<3.0
 huggingface_hub>=0.24
 gtts>=2.5          # TTS last-resort engine (was missing before = silent death)
 imageio-ffmpeg>=0.5   # bundled ffmpeg binary the renderer actually uses
+yt-dlp>=2024.0.0
+youtube-transcript-api>=0.6.0

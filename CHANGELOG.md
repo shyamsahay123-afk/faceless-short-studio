@@ -96,3 +96,7 @@
 * **Deep Codebase Audit:** Conducted a comprehensive static analysis (`flake8`) across the entire repository to catch any silent failure points or logic mismatches.
 * **API Key Save Bug:** Fixed a broken function call (`save_local_key` -> `save_key_to_file`) in `app.py` that would have crashed the UI when users tried to input their Groq API keys.
 * **Autopilot Voice Overwrite Bug:** Fixed a logic flaw in `daily.py` where the autopilot CLI mode forcefully ignored the `daily_settings.json` voice selection and strictly rendered the English Male voice regardless of the user's config. It now dynamically matches the config file and safely maps fallback choices.
+
+## v2.6.0 - 2026-09-02
+* **AI Quality Control Auditor:** Built `auto_auditor.py` and integrated it directly into the autopilot loop. The machine now self-audits every render using mathematical decibel scanning and visual frame extraction. If an MP4 renders silently or with a black screen, the Auditor will block the upload, delete the file, and log a `FAIL` report.
+* **YouTube Reverse Engineer Tool:** Added `yt_analyzer.py`, a new CLI tool designed to rip the transcript skeleton and metadata tags from competitor YouTube Shorts for direct script reverse-engineering.
