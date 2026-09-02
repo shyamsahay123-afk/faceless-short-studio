@@ -465,22 +465,24 @@ pacing_label = col_s2.selectbox("⏱️ Video Pacing (now LIVE)", [
     "🌑 Deep Cosmic (4-9s holds — GOONINGGNG)",
     "⚡ Adrenaline ADHD (1.3s cuts)",
     "🎬 Cinematic (2.0s cuts)",
-    "🌌 Mindful Slower (3.2s cuts)"
+    "🌌 Mindful Slower (3.2s cuts)",
+    "🕊️ Unburdened Flow (3.5s smooth)"
 ])
 pacing_mapping = {
     "⚡ Adrenaline ADHD (1.3s cuts)": ("adrenaline", 1.3),
     "🎬 Cinematic (2.0s cuts)": ("cinematic", 2.0),
     "🌌 Mindful Slower (3.2s cuts)": ("mindful", 3.2),
+    "🕊️ Unburdened Flow (3.5s smooth)": ("unburdened", 3.5),
     "🌑 Deep Cosmic (4-9s holds — GOONINGGNG)": ("cosmic", 6.0)
 }
 pacing_code, cut_duration_val = pacing_mapping[pacing_label]
 
-caption_theme_label = col_s3.selectbox("🔤 Caption Theme", ["⌨️ Typewriter (GOONINGGNG)", "⚪ Minimalist White (reference style)", "🎬 Cinematic Sentences (mystery style)", "🔥 Hormozi Gold style", "🌌 Cyberpunk Neon"])
+caption_theme_label = col_s3.selectbox("🔤 Caption Theme", ["⌨️ Typewriter (GOONINGGNG)", "⚪ Minimalist White (reference style)", "🎬 Cinematic Sentences (mystery style)", "🔥 Hormozi Gold style", "🌌 Cyberpunk Neon", "🕊️ Unburdened Documentary (Smooth fades)"])
 caption_mapping = {
     "⚪ Minimalist White (reference style)": ("minimalist", "white"),
     "🎬 Cinematic Sentences (mystery style)": ("cinematic", "white"),
     "🔥 Hormozi Gold style": ("hormozi", "yellow"),
-    "🌌 Cyberpunk Neon": ("cyberpunk", "cyan"),
+    "🌌 Cyberpunk Neon", "🕊️ Unburdened Documentary (Smooth fades)": ("cyberpunk", "cyan"),
     "⌨️ Typewriter (GOONINGGNG)": ("typewriter", "white")
 }
 caption_style_code, caption_color = caption_mapping[caption_theme_label]

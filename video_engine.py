@@ -2228,12 +2228,16 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
     is_word_pop = "hormozi" in caption_theme or "cyberpunk" in caption_theme or "word_pop" in caption_theme
     is_cinematic = "cinematic" in caption_theme
     is_typewriter = "typewriter" in caption_theme
+    is_unburdened = "unburdened" in caption_theme
 
     if is_typewriter:
         # User request: "WORDS PLACING WRONG, didnot edit it can be edited more professionally"
         # 3 words is too chunky and wraps weirdly. 1-2 words looks much more professional and dynamic.
         display_subs = split_subtitles_into_words(subtitles, words_per_clip=1)
         actual_font_size = int(font_size * 0.90)  # Larger, more legible
+    elif is_unburdened:
+        display_subs = split_subtitles_into_words(subtitles, words_per_clip=3)
+        actual_font_size = int(font_size * 0.90)
     elif is_cinematic:
         # Reference #3 style: sentence-level phrases (3 words), no spring bounce,
         # calm gold/white — the narration stays the star
@@ -2313,6 +2317,10 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
                 word_color, is_power = "#FF4D4D", True
             elif clean_w in GAIN_WORDS:
                 word_color, word_size, is_power = "#00E676", int(actual_font_size * 1.12), True
+        elif "unburdened" in caption_theme:
+            base_color = "white"
+            stroke_color = (0, 0, 0, 100)
+            stroke_width = 3
         elif "minimalist" in caption_theme:
             word_color, stroke_width = "#FFFFFF", 2
             if re.search(r"\d", txt) or "%" in txt:
@@ -2385,6 +2393,8 @@ def build_subtitle_and_sfx_clips(subtitles, target_w=720, font_size=55, color='y
                            .with_start(max(0.0, s['start'] - 0.15))  # PRO: captions lead voice by 0.15s
                            .with_position(('center', 940))  # PRO STANDARD: 65-75% down (73.4%), clears bottom UI zone
         )
+        if 'unburdened' in caption_theme:
+            text_clips[-1] = text_clips[-1].fadein(0.15)
         
         if is_power and power_tick_budget > 0:
             power_tick_budget -= 1

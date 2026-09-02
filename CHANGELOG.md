@@ -100,3 +100,6 @@
 ## v2.6.0 - 2026-09-02
 * **AI Quality Control Auditor:** Built `auto_auditor.py` and integrated it directly into the autopilot loop. The machine now self-audits every render using mathematical decibel scanning and visual frame extraction. If an MP4 renders silently or with a black screen, the Auditor will block the upload, delete the file, and log a `FAIL` report.
 * **YouTube Reverse Engineer Tool:** Added `yt_analyzer.py`, a new CLI tool designed to rip the transcript skeleton and metadata tags from competitor YouTube Shorts for direct script reverse-engineering.
+
+## v2.6.1 - 2026-09-02
+* **Elite Documentary Unburdened Style:** Added a brand new "Unburdened Documentary" visual mode designed to mimic the effortless, minimalist retention style of top creators. This introduces smooth 3.5s pacing logic, completely removes jittery ADHD text bounces, expands captions to elegant 3-word sentence chunks, and applies a gentle `fadein` shadow effect to keep the visuals beautiful and unburdened.

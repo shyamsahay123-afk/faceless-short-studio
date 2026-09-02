@@ -151,7 +151,7 @@ def build_scene_rhythm(beat_map, vtt_subs, duration, seed=7, pacing="cinematic")
 
     # pacing scales the shot lengths (the app's Video Pacing dropdown —
     # previously the knob was passed but never read; now it actually works)
-    scale = {"adrenaline": 0.7, "cinematic": 1.0, "mindful": 1.6}.get(pacing, 1.0)
+    scale = {"adrenaline": 0.7, "cinematic": 1.0, "mindful": 1.6, "unburdened": 2.0}.get(pacing, 1.0)
 
     def cut_len(t):
         if t < 3.0:
