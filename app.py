@@ -240,7 +240,7 @@ with st.sidebar.expander("🔑 Configure Keys (Auto-Saved)", expanded=True):
     saved_groq = get_secret_key("GROQ_API_KEY", "groq_key.txt")
     raw_groq_key = st.text_input("Groq Key (AI Director LLM)", type="password", value=saved_groq)
     if raw_groq_key != saved_groq:
-        save_local_key("groq_key.txt", raw_groq_key)
+        save_key_to_file("groq_key.txt", raw_groq_key)
         st.rerun()
     st.caption(f"{'🟢 Connected' if raw_groq_key.strip() else '🔴 Missing (Using legacy templates)'}")
     
@@ -299,7 +299,7 @@ st.sidebar.write(f"📁 Total Videos Generated: **{len(all_shorts)}**")
 # ==============================================================================
 # MAIN PAGE INTERFACE
 # ==============================================================================
-st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.5.2</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎬 Faceless AI Short Studio <span style="font-size: 0.4em; color: #888;">v2.5.3</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">YouTube Trends Crawler 🤝 Real-Time Interactive AI Script Editor 🤝 Hybrid Video Compiler</div>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------

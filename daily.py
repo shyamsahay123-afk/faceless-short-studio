@@ -116,11 +116,15 @@ def publish_to_videos_repo(video_path, thumb_path, repo, token):
         return False
 
 
-VOICE_MAP = {
-    "en": ("Deep Narrator Male", "en-GB-RyanNeural"),
-    "hi": ("Deep Narrator Male", "hi-IN-MadhurNeural"),
+# Voice Map imported or duplicated to allow local fallback mapping based on config
+VOICE_CODE_MAP = {
+    "Deep Narrator Male": "en-GB-RyanNeural", 
+    "Energetic Male": "en-US-GuyNeural",
+    "Warm Female": "en-US-JennyNeural", 
+    "Calm British Female": "en-GB-SoniaNeural",
+    "Hindi Male": "hi-IN-MadhurNeural",
+    "Hindi Female": "hi-IN-SwaraNeural"
 }
-
 
 def render_one(topic, st, args):
     """Render + QC + publish ONE video. Returns 0 on success, 1 on failure."""
@@ -151,7 +155,12 @@ def render_one(topic, st, args):
     print(f"[3/6] Saved to database (id {short_id})")
 
     # 4) RENDER (locked channel identity)
-    voice_preset, voice_code = VOICE_MAP[args.lang]
+    voice_preset = st.get("voice_preset", "Deep Narrator Male")
+    voice_code = VOICE_CODE_MAP.get(voice_preset, "en-GB-RyanNeural")
+    if args.lang == "hi" and "Hindi" not in voice_preset:
+        voice_preset = "Hindi Male"
+        voice_code = "hi-IN-MadhurNeural"
+
     _bible = video.load_character_bible()
     if st.get("watermark"):
         _bible["watermark"] = st["watermark"]

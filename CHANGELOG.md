@@ -91,3 +91,8 @@
 ## v2.5.2 - 2026-08-31
 * **True Windows Threading Fix (Subprocess Isolation):** The previous thread patch for Windows `edge-tts` was insufficient because Streamlit's Tornado event loop still polluted the environment. Rewrote the TTS generator to spawn a completely isolated, pristine Python subprocess for `edge-tts`. This physically guarantees zero event-loop crashes, completely permanently fixing the identical `gTTS` fallback bug.
 * **Invalid Voice Fallback Fix:** Fixed an invalid voice ID (`en-US-JaneNeural`) that was causing a silent network crash and forcing the identical `gTTS` fallback for the "Warm Female" preset. Replaced with valid `en-US-JennyNeural`.
+
+## v2.5.3 - 2026-08-31
+* **Deep Codebase Audit:** Conducted a comprehensive static analysis (`flake8`) across the entire repository to catch any silent failure points or logic mismatches.
+* **API Key Save Bug:** Fixed a broken function call (`save_local_key` -> `save_key_to_file`) in `app.py` that would have crashed the UI when users tried to input their Groq API keys.
+* **Autopilot Voice Overwrite Bug:** Fixed a logic flaw in `daily.py` where the autopilot CLI mode forcefully ignored the `daily_settings.json` voice selection and strictly rendered the English Male voice regardless of the user's config. It now dynamically matches the config file and safely maps fallback choices.
