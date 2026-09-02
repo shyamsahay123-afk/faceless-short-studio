@@ -9,7 +9,6 @@ import re
 import math
 import zlib
 import random
-import struct
 import datetime
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont

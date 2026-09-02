@@ -1,15 +1,11 @@
 import os
-import re
 import gc
-import random
 import traceback
 import xml.etree.ElementTree as ET
 import requests
 import numpy as np
 import streamlit as st
-from PIL import Image
 import db_manager as db
-import psychology_data as psych
 import video_engine as video
 import youtube_engine as yt
 
@@ -196,8 +192,8 @@ def display_status_badge(status):
 
 # --- REAL-TIME GOOGLE & YOUTUBE SHORTS TREND BOARD CRAWLER ---
 def fetch_trending_shorts_concepts():
-    import random
     import time
+    import random
     all_trends = [
         "Why the Top 1% Use Dopamine Fasting to Build Unshakeable Focus",
         "The Dark Psychology of the 'Pavlov Effect' (How to brainwash yourself to work)",
@@ -225,7 +221,7 @@ def fetch_trending_shorts_concepts():
 
 # --- Standalone AI Script Draft Generator (now in script_engine.py so the
 # daily.py CLI autopilot can import it without starting Streamlit) ---
-from script_engine import auto_generate_script_local, score_hook, best_hook_line, generate_script_with_score
+from script_engine import auto_generate_script_local, score_hook, best_hook_line
 
 # ==============================================================================
 # DATABASE & SETTINGS INITIALIZATION

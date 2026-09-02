@@ -1,19 +1,17 @@
+import zlib
 import os
 import re
 import json
 import glob
 import gc
-import asyncio
 import threading
-import subprocess
 import numpy as np
 import requests
 import time
 import random
-import edge_tts
 import db_manager as db_settings
 from moviepy import (
-    VideoClip, ImageClip, VideoFileClip, AudioFileClip, AudioClip, CompositeVideoClip, TextClip, concatenate_videoclips, CompositeAudioClip, concatenate_audioclips
+    VideoClip, ImageClip, VideoFileClip, AudioFileClip, AudioClip, CompositeVideoClip, TextClip, CompositeAudioClip, concatenate_audioclips
 )
 from PIL import Image, ImageDraw, ImageFont
 try:
@@ -702,7 +700,6 @@ def get_variety_cosmic_concept(query):
     }
     
     # What family did the query map to natively?
-    import zlib
     seed_idx = zlib.crc32(str(query).encode("utf-8"))
     
     # We want to pick a family that isn't in the last 2 used.
@@ -876,8 +873,7 @@ def download_pexels_b_roll_with_fallback(query, api_key, source="pexels", color_
     expanded = expand_keyword_to_concept(clean_query, cosmic=cosmic)
     if cosmic and expanded is None:
         # no cosmos match for this word: deterministic draw from the cosmic pool
-        import zlib
-        expanded = get_variety_cosmic_concept(query)
+                expanded = get_variety_cosmic_concept(query)
     
     clip = None
     if source == "pixabay":

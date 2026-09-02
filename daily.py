@@ -206,18 +206,18 @@ def render_one(topic, st, args):
             reason = "Out of Memory (OOM)"
             
         with open(crash_log_path, "w", encoding="utf-8") as f:
-            f.write(f"=== PC WATCHDOG CRASH REPORT ===\n")
+            f.write("=== PC WATCHDOG CRASH REPORT ===\n")
             f.write(f"Time: {time.ctime()}\n")
             f.write(f"Topic: {topic}\n")
             f.write(f"Guessed Reason: {reason}\n")
             f.write(f"Error: {e}\n\n")
             f.write(f"Full Traceback:\n{error_trace}\n")
-            f.write(f"================================\n")
+            f.write("================================\n")
             
-        print(f"\n[!] WATCHDOG TRIGGERED: {reason}")
+        print("\n[!] WATCHDOG TRIGGERED: {reason}")
         print(f"[!] RENDER FAILED: {e}")
         print(f"[!] Wrote full crash details to {crash_log_path}")
-        print(f"[!] HALTING autopilot to save your time.\n")
+        print("[!] HALTING autopilot to save your time.\n")
         
         try:
             db.update_short_status(short_id, "failed")
