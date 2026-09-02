@@ -103,3 +103,6 @@
 
 ## v2.6.1 - 2026-09-02
 * **Elite Documentary Unburdened Style:** Added a brand new "Unburdened Documentary" visual mode designed to mimic the effortless, minimalist retention style of top creators. This introduces smooth 3.5s pacing logic, completely removes jittery ADHD text bounces, expands captions to elegant 3-word sentence chunks, and applies a gentle `fadein` shadow effect to keep the visuals beautiful and unburdened.
+
+## v2.6.2 - 2026-09-02
+* **Dictionary Syntax Fix:** Resolved a `SyntaxError` in `app.py` caused by a malformed string replacement in the `caption_mapping` dictionary.

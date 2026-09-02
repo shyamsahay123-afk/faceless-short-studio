@@ -482,7 +482,8 @@ caption_mapping = {
     "⚪ Minimalist White (reference style)": ("minimalist", "white"),
     "🎬 Cinematic Sentences (mystery style)": ("cinematic", "white"),
     "🔥 Hormozi Gold style": ("hormozi", "yellow"),
-    "🌌 Cyberpunk Neon", "🕊️ Unburdened Documentary (Smooth fades)": ("cyberpunk", "cyan"),
+    "🌌 Cyberpunk Neon": ("cyberpunk", "cyan"),
+    "🕊️ Unburdened Documentary (Smooth fades)": ("unburdened", "white"),
     "⌨️ Typewriter (GOONINGGNG)": ("typewriter", "white")
 }
 caption_style_code, caption_color = caption_mapping[caption_theme_label]
