@@ -106,3 +106,6 @@
 
 ## v2.6.2 - 2026-09-02
 * **Dictionary Syntax Fix:** Resolved a `SyntaxError` in `app.py` caused by a malformed string replacement in the `caption_mapping` dictionary.
+
+## v2.6.3 - 2026-09-02
+* **Missing Import Patched:** Fixed a `NameError` crash in `video_engine.py` caused by the `subprocess` import being accidentally removed during the previous codebase linting sweep.

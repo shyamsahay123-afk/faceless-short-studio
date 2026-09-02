@@ -43,6 +43,7 @@ except ImportError:
 # --- PROACTIVE WINDOWS & PYTHON 3.14 COMPATIBILITY PATCHES ---
 # ==============================================================================
 
+import subprocess
 original_poll = subprocess.Popen.poll
 def safe_poll(self):
     try:
