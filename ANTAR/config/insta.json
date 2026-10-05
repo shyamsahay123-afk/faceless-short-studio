@@ -1,0 +1,87 @@
+{
+  "_note": "INSTA TRACK - Pro Human Edits - Rectangular Middle + Clean Edges + Different Fonts",
+  "track": "insta",
+  "canvas": {
+    "width": 1080,
+    "height": 1920,
+    "inner_width": 1000,
+    "inner_height": 1350,
+    "inner_x": 40,
+    "inner_y": 280,
+    "corner_radius": 28,
+    "stroke_width": 2,
+    "stroke_color": "#FFFFFF33",
+    "shadow_offset": 8,
+    "shadow_blur": 24,
+    "background": "blurred_same_clip + dark_overlay_60pct",
+    "safe_zones": {
+      "top_px": 220,
+      "bottom_px": 420
+    }
+  },
+  "fonts": {
+    "talking": {
+      "file": "Khand-Bold.ttf",
+      "size_over_footage": 150,
+      "stroke": 8,
+      "shadow": 6,
+      "pill": true,
+      "pill_color": "#000000A0",
+      "pill_radius": 24,
+      "note": "when talking to viewers - Khand"
+    },
+    "quote_luxury": {
+      "file": "Didot-Placeholder.ttf",
+      "size": 90,
+      "mood": "luxury",
+      "color": "#F5F5F0",
+      "stroke": 6,
+      "note": "luxury/sad quotes - serif"
+    },
+    "quote_bold": {
+      "file": "BebasNeue-Regular.ttf",
+      "size": 140,
+      "mood": "bold",
+      "color": "#FFFFFF",
+      "stroke": 6,
+      "note": "bold motivation quotes"
+    }
+  },
+  "edits": {
+    "clean_edges": {
+      "method": "4x supersample rounded mask + LANCZOS downsample",
+      "radius": 28,
+      "anti_alias": true
+    },
+    "micro_zoom": {
+      "enabled": true,
+      "from": 1.0,
+      "to": 1.05,
+      "duration": 3.0,
+      "easing": "easeOutCubic",
+      "note": "subtle Ken Burns - human"
+    },
+    "text_animation": {
+      "talking": "cut (no fade) - 1-2 words, pill + stroke",
+      "quote": "fade 0.3s + hold 2s + fade 0.3s OR typewriter"
+    }
+  },
+  "phonk": {
+    "folder": "sfx_library/phonks",
+    "note": "User will provide trending phonks - 2-3 signature tracks reused for recognition",
+    "signature_tracks": 2,
+    "reuse_for_recognition": true,
+    "beat_detection": "librosa onset_detect or aubio",
+    "shake_zoom_on_drop": {
+      "formula": "scale = 1 + 0.15*exp(-3*t)*sin(20*t), x/y random*exp(-3*t)",
+      "enabled": true,
+      "note": "shake/zoom when sounds drop - only if user provides phonks"
+    }
+  },
+  "premium_clips": {
+    "source": "vault only",
+    "never_random_pexels": true,
+    "max_uses_per_clip": 2,
+    "lookalike_check": true
+  }
+}
