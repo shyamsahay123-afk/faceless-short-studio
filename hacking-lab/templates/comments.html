@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Comments - Stored XSS</h2>
+<div class="card vuln">
+    <p><b>Stored XSS:</b> Post <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> or <code>&lt;img src=x onerror=alert(1)&gt;</code></p>
+    <p>It will execute for every visitor</p>
+    <p>Defense: Sanitize input, escape output, CSP header</p>
+</div>
+<form method="POST">
+    <textarea name="comment" placeholder="Your comment (try XSS)"></textarea><br><br>
+    <button>Post</button>
+</form>
+{% for c in comments %}
+<div class="card">
+    <b>{{ c.user }}</b> at {{ c.time }}<br>
+    {{ c.comment|safe }}
+</div>
+{% endfor %}
+{% endblock %}

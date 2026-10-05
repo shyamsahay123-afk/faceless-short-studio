@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Hidden Links - Recon Practice</h2>
+<div class="card">
+    <p>Find hidden links via View Source, Inspect Element, robots.txt</p>
+    <!-- Hidden link: /secret_notes.txt -->
+    <!-- Another: /hidden_flag_92j3k.txt -->
+    <p>Visible content here...</p>
+    <div style="display:none">
+        <a href="/admin_backup">Hidden Admin Backup</a>
+        <a href="/dev_console">Dev Console</a>
+    </div>
+    <p style="color: #0a0a0a;">Invisible text with link: <a href="/backup.zip" style="color:#0a0a0a">backup.zip</a></p>
+</div>
+<div class="card">
+    <h3>Source Code Comments</h3>
+    <p>Check page source (Ctrl+U) for more hidden paths</p>
+</div>
+<!-- 
+    Secret dev note:
+    - /api/users?id=1 has IDOR
+    - /admin_panel_v2 is new admin
+    - Flag: THM{hidden_comments_found}
+-->
+{% endblock %}

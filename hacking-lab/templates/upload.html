@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>File Upload - Bypass Practice</h2>
+<div class="card vuln">
+    <p>Blocked: .php, .phtml</p>
+    <p>Bypass: .php5, .phtml, .jpg.php, .php%00.jpg, case: .PhP</p>
+    <p>Defense: Check MIME, rename file, store outside webroot, no exec</p>
+</div>
+<form method="POST" enctype="multipart/form-data">
+    <input type="file" name="file"><br><br>
+    <button>Upload</button>
+</form>
+{% if msg %}<div class="card">{{ msg }}</div>{% endif %}
+{% endblock %}

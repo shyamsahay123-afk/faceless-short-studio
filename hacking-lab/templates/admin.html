@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Admin Panel</h2>
+<div class="card">
+    <p class="flag">{{ flag }}</p>
+    <p>Welcome admin! Flag: THM{admin_panel_accessed}</p>
+</div>
+<div class="card">
+    <h3>Users</h3>
+    {% for u, d in users.items() %}
+        <p>{{ d.id }} - {{ u }} - {{ d.role }} - {{ d.password }}</p>
+    {% endfor %}
+</div>
+<div class="card">
+    <h3>Blocked IPs</h3>
+    {% for ip in blocked %}<p>{{ ip }}</p>{% else %}<p>None blocked</p>{% endfor %}
+</div>
+<div class="card">
+    <h3>Recent Logs (Defense)</h3>
+    {% for log in logs %}
+        <p>{{ log.time }} - {{ log.ip }} - {{ log.method }} {{ log.path }} - {{ log.payload }} {% if log.blocked %}[BLOCKED]{% endif %}</p>
+    {% endfor %}
+</div>
+{% endblock %}

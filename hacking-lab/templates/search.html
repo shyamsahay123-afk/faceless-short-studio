@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Search - SQLi + XSS Vulnerable</h2>
+<div class="card vuln">
+    <p><b>SQLi:</b> Try <code>' OR '1'='1</code> or <code>admin' --</code></p>
+    <p><b>XSS Reflected:</b> Try <code>&lt;script&gt;alert(document.cookie)&lt;/script&gt;</code></p>
+    <p><b>Defense:</b> Parameterized queries + escape HTML: &lt; becomes &amp;lt;</p>
+</div>
+<form>
+    <input name="q" value="{{ q }}" placeholder="Search...">
+    <button>Search</button>
+</form>
+<div class="card">
+    {{ result|safe }}
+    <!-- VULN: result uses |safe - should be escaped -->
+</div>
+{% endblock %}

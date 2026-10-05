@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "keys": [],
+  "note": "Add your keys via: python3 run.py keys add groq YOUR_KEY or edit .env then run keys import"
+}

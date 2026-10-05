@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>🛡️ Defense Dashboard - Blue Team</h1>
+
+<div class="card defense">
+    <h2>How to Defend This Lab</h2>
+    <p>This page shows OFFENSIVE logs and DEFENSIVE controls. In real world, you'd have WAF, SIEM.</p>
+</div>
+
+<div class="card">
+    <h3>Block IP (Defensive Action)</h3>
+    <form method="POST" action="/defense/block">
+        <input name="ip" placeholder="IP to block (e.g. 127.0.0.1)">
+        <button>Block IP</button>
+    </form>
+    <form method="POST" action="/defense/unblock">
+        <input name="ip" placeholder="IP to unblock">
+        <button>Unblock</button>
+    </form>
+    <form method="POST" action="/defense/clear_logs">
+        <button>Clear Logs</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Currently Blocked IPs</h3>
+    {% for ip in blocked %}<p>{{ ip }} <form method="POST" action="/defense/unblock" style="display:inline"><input type="hidden" name="ip" value="{{ ip }}"><button>Unblock</button></form></p>{% else %}<p>None</p>{% endfor %}
+</div>
+
+<div class="card">
+    <h3>Attack Logs (100 latest) - Detect Recon</h3>
+    <p>Look for: /robots.txt, /.git/, SQLi payloads (' OR), XSS (<script), LFI (../), many 404s</p>
+    <table border="1" style="width:100%; font-size:12px;">
+        <tr><th>Time</th><th>IP</th><th>Method</th><th>Path</th><th>Payload</th><th>Blocked?</th></tr>
+        {% for log in logs %}
+        <tr style="{% if log.blocked %}background:#300{% elif 'OR' in log.payload or '<script' in log.payload or '../' in log.payload %}background:#330{% endif %}">
+            <td>{{ log.time }}</td><td>{{ log.ip }}</td><td>{{ log.method }}</td><td>{{ log.path }}</td><td>{{ log.payload }}</td><td>{{ log.blocked }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<div class="card defense">
+    <h3>Secure Code Examples (Fix the vulns)</h3>
+    <pre>
+// SQLi Fix (Python)
+cursor.execute("SELECT * FROM users WHERE user=? AND pass=?", (user, pass))
+
+// XSS Fix
+import html
+safe = html.escape(user_input)
+
+// IDOR Fix
+if file.owner != session['user']:
+    abort(403)
+
+// LFI Fix
+import os
+if ".." in file or file.startswith("/"):
+    abort(400)
+safe_path = os.path.join(BASE, os.path.basename(file))
+
+// Command Injection Fix - NEVER use shell=True with user input
+subprocess.run(["ls", "-l", user_input]) # safe, no shell
+
+// IP Blocking Fix
+BLOCKED = set()
+if ip in BLOCKED: abort(403)
+
+// Hide sensitive files
+# nginx: location ~ /\.git { deny all; }
+# robots.txt: Don't list sensitive paths
+    </pre>
+</div>
+
+<div class="card">
+    <h3>TryHackMe Defense Rooms to Study</h3>
+    <ul>
+        <li>OWASP Top 10 Defensive</li>
+        <li>Burp Suite - Defender view</li>
+        <li>Incident Response, SOC Level 1</li>
+        <li>Logs: Splunk, ELK</li>
+    </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Profile - IDOR Vulnerable</h2>
+<div class="card vuln">
+    <p><b>IDOR:</b> URL is /profile?id={{ requested_id }} - change id to 1,2,3 to see other users</p>
+    <p>Current user: {{ current_user }}, Requested: {{ user }}</p>
+    <p><b>Defense:</b> Check if requested_id == current_user_id, else deny</p>
+</div>
+<div class="card">
+    <h3>{{ user }}'s Profile (ID {{ data.id }})</h3>
+    <p>Role: {{ data.role }}</p>
+    <p>Password: {{ data.password }} (should not be exposed!)</p>
+    {% if data.role == 'admin' %}<p class="flag">THM{idor_profile_admin}</p>{% endif %}
+</div>
+{% endblock %}

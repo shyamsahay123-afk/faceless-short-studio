@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<h2>Login - SQLi Vulnerable</h2>
+<div class="card vuln">
+    <p><b>Vuln:</b> Query is: SELECT * FROM users WHERE user='INPUT' AND pass='INPUT'</p>
+    <p>Try: <code>admin' --</code> as username, any password</p>
+    <p>Or: <code>' OR '1'='1</code> in both fields</p>
+    <p><b>Defense:</b> Use parameterized: cursor.execute("SELECT * FROM users WHERE user=? AND pass=?", (user, pass))</p>
+</div>
+<form method="POST">
+    <input name="username" placeholder="Username (try admin' --)"><br><br>
+    <input name="password" placeholder="Password" type="password"><br><br>
+    <button>Login</button>
+</form>
+{% if error %}<div class="card" style="color:red">{{ error }}</div>{% endif %}
+<p>Valid users: admin/admin123, alice/alice123, bob/bob123, guest/guest</p>
+<!-- Debug: backup creds in /admin_backup -->
+{% endblock %}

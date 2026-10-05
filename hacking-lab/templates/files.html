@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Files - IDOR</h2>
+<div class="card vuln">
+    <p>File ID: {{ file_id }} - Try id=3 for flag</p>
+    <p>Defense: Check owner</p>
+</div>
+<div class="card">
+    <h3>{{ file.name }} (Owner: {{ file.owner }})</h3>
+    <p>{{ file.content }}</p>
+</div>
+<div class="card">
+    <h4>All Files</h4>
+    {% for id, f in all_files.items() %}
+        <p><a href="/files?id={{ id }}">{{ id }} - {{ f.name }} ({{ f.owner }})</a></p>
+    {% endfor %}
+</div>
+{% endblock %}

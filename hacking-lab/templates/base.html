@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hacking Lab - {% block title %}Home{% endblock %}</title>
+    <style>
+        body { font-family: monospace; background: #0a0a0a; color: #00ff00; margin: 0; padding: 0; }
+        .nav { background: #111; padding: 10px; border-bottom: 1px solid #00ff00; }
+        .nav a { color: #00ff00; margin-right: 15px; text-decoration: none; }
+        .nav a:hover { color: #fff; }
+        .container { padding: 20px; max-width: 1000px; margin: auto; }
+        .card { background: #111; border: 1px solid #333; padding: 15px; margin: 10px 0; }
+        .vuln { border-left: 3px solid red; }
+        .defense { border-left: 3px solid #00ff00; }
+        .flag { background: #222; color: gold; padding: 5px; }
+        input, textarea { background: #000; color: #0f0; border: 1px solid #0f0; padding: 8px; width: 90%; }
+        button { background: #0f0; color: #000; border: none; padding: 8px 15px; cursor: pointer; }
+        .hidden-comment { display: none; }
+        .ip { color: #ff0; }
+    </style>
+</head>
+<body>
+<div class="nav">
+    <a href="/">Home</a>
+    <a href="/login">Login</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/search">Search</a>
+    <a href="/profile">Profile</a>
+    <a href="/files">Files</a>
+    <a href="/comments">Comments</a>
+    <a href="/hidden">Hidden</a>
+    <a href="/upload">Upload</a>
+    <a href="/dev_console">Dev Console</a>
+    <a href="/admin">Admin</a>
+    <a href="/defense">🛡️ Defense</a>
+    <a href="/logout">Logout</a>
+    <span style="float:right">IP: <span class="ip">{{ request.headers.get('X-Forwarded-For', request.remote_addr) }}</span></span>
+</div>
+<div class="container">
+    {% block content %}{% endblock %}
+    <!-- TODO: remove debug - backup at /admin_backup -->
+    <!-- Secret: check /robots.txt and /sitemap.xml for hidden paths -->
+</div>
+</body>
+</html>

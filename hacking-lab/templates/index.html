@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<h1>🔓 Hacking Lab - Offensive + Defensive</h1>
+<div class="card">
+    <h2>Welcome to TryHackMe-Style Lab (Educational)</h2>
+    <p>This is a deliberately vulnerable site for learning in your own lab. Don't attack real sites.</p>
+    <p>Your IP: <span class="ip">{{ ip }}</span></p>
+</div>
+
+<div class="card vuln">
+    <h3>🎯 Offensive Track - Find Flags</h3>
+    <ol>
+        <li><b>Recon:</b> Check <a href="/robots.txt">/robots.txt</a>, <a href="/sitemap.xml">/sitemap.xml</a>, view source for comments, try <a href="/.git/config">/.git/config</a></li>
+        <li><b>Hidden Links:</b> Go to <a href="/hidden">/hidden</a> - find invisible links and HTML comments</li>
+        <li><b>Login Bypass:</b> <a href="/login">/login</a> - Try SQLi: <code>admin' --</code> or <code>' OR '1'='1</code></li>
+        <li><b>IDOR:</b> <a href="/profile?id=1">/profile?id=1</a> change id to 2,3 - <a href="/files?id=1">/files?id=1</a> -> id=3 for flag, <a href="/api/users?id=1">/api/users?id=1</a></li>
+        <li><b>XSS:</b> <a href="/search?q=<script>alert(1)</script>">/search?q=&lt;script&gt;alert(1)&lt;/script&gt;</a> (reflected), <a href="/comments">/comments</a> stored XSS</li>
+        <li><b>LFI:</b> <a href="/dev_console?file=secret_notes.txt">/dev_console?file=secret_notes.txt</a> try <code>../../../../etc/passwd</code></li>
+        <li><b>Command Injection:</b> <a href="/dev_console?cmd=whoami">/dev_console?cmd=whoami</a> try <code>whoami;id</code></li>
+        <li><b>File Upload:</b> <a href="/upload">/upload</a> try bypass .php with .php5 or double extension</li>
+        <li><b>Admin Panel:</b> <a href="/admin_backup">/admin_backup</a> -> <a href="/admin">/admin</a> -> <a href="/dev_console">/dev_console</a></li>
+        <li><b>IP Blocking:</b> Trigger 403 by spamming, then bypass via X-Forwarded-For header</li>
+    </ol>
+    <p>Flags format: THM{...}</p>
+</div>
+
+<div class="card defense">
+    <h3>🛡️ Defensive Track - How to Stop It</h3>
+    <ol>
+        <li><b>Recon Defense:</b> Block /.git/, remove robots.txt sensitive, disable directory listing</li>
+        <li><b>SQLi Defense:</b> Use parameterized queries, not string concatenation</li>
+        <li><b>IDOR Defense:</b> Check ownership: <code>if file.owner != current_user: deny</code></li>
+        <li><b>XSS Defense:</b> Escape output, use Content-Security-Policy, sanitize comments</li>
+        <li><b>LFI Defense:</b> Whitelist files, block ../, use basename()</li>
+        <li><b>Command Injection:</b> Never use user input in shell, use subprocess without shell=True</li>
+        <li><b>Upload Defense:</b> Check MIME type, rename files, store outside webroot</li>
+        <li><b>IP Blocking:</b> Implement in <a href="/defense">/defense</a> - block attacker IPs, log attempts</li>
+    </ol>
+</div>
+
+<div class="card">
+    <h3>📚 TryHackMe Rooms to Study Alongside</h3>
+    <ul>
+        <li>OWASP Top 10 - Injection, Broken Auth, XSS, etc</li>
+        <li>Web Fundamentals - How web works</li>
+        <li>Burp Suite - Intercept and modify requests</li>
+        <li>SQL Injection, XSS, LFI, Command Injection rooms</li>
+        <li>Jr Penetration Tester path</li>
+    </ul>
+</div>
+
+<div style="display:none">
+    <!-- Hidden link for recon practice: /hidden_flag_92j3k.txt -->
+    <a href="/hidden_flag_92j3k.txt">hidden flag</a>
+</div>
+{% endblock %}

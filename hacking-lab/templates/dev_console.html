@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Dev Console - LFI + Command Injection</h2>
+<div class="card vuln">
+    <p><b>LFI:</b> ?file=secret_notes.txt or ?file=../../../../etc/passwd</p>
+    <p><b>Command Injection:</b> ?cmd=whoami or ?cmd=whoami;id or ?cmd=cat /etc/passwd</p>
+    <p>Defense: Whitelist, block ../ and ; & | ` $</p>
+</div>
+<form>
+    <input name="cmd" value="{{ cmd }}" placeholder="Command (whoami)"><br><br>
+    <input name="file" value="{{ file }}" placeholder="File (secret_notes.txt)"><br><br>
+    <button>Execute</button>
+</form>
+{% if output %}<div class="card" style="color:yellow">{{ output|safe }}</div>{% endif %}
+{% endblock %}

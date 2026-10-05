@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Dashboard - {{ user }} ({{ role }})</h2>
+<div class="card">
+    <p>Welcome {{ user }}!</p>
+    {% if role == 'admin' %}
+        <p><a href="/admin">Admin Panel</a> | <a href="/defense">Defense Panel (block IPs)</a></p>
+        <p class="flag">Admin Flag: THM{dashboard_admin_access}</p>
+    {% endif %}
+</div>
+<div class="card">
+    <h3>All Users (IDOR practice - change id in /profile?id=)</h3>
+    {% for u, d in users.items() %}
+        <p>{{ d.id }} - {{ u }} - {{ d.role }} - <a href="/profile?id={{ d.id }}">View Profile (IDOR)</a></p>
+    {% endfor %}
+</div>
+{% endblock %}
