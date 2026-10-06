@@ -1,0 +1,20 @@
+# LUXE - Luxury Quote Reels Studio - Requirements
+# No voice needed - basic English reels with phonk
+
+# Core - mandatory
+requests>=2.31.0          # API calls for clips
+numpy>=1.26               # measurements, gradient, rendering maths
+Pillow>=10.0.0            # image rendering, rounded corners, text, clean edges
+imageio-ffmpeg>=0.4.9     # ffmpeg binary - auto fallback when PATH has none, renders videos
+opencv-python-headless<5  # face scan, premium clip verification
+
+# Phonk beat detection - for shake/zoom on drop
+librosa>=0.10.0           # beat detection, onset_detect for phonk drops
+aubio>=0.4.9              # alternative beat tracking (optional)
+
+# Optional but recommended for pro edits
+# edge-tts>=6.1.9         # voice - NOT NEEDED for LUXE (no voice as per user)
+# faster-whisper          # word timings - NOT NEEDED for LUXE (no voice)
+
+# Tools check
+# ffmpeg is installed via apt OR via imageio-ffmpeg fallback - both work in Kali

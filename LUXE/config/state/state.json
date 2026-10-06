@@ -1,0 +1,30 @@
+{
+  "render_counter": 2,
+  "last_rotation": {},
+  "last_render": {
+    "render_id": "ANTAR_0002_quietluxuryquotes",
+    "stage": "script",
+    "score": 100,
+    "words": 5,
+    "model": "offline/offline",
+    "at": 1791247968.043948
+  },
+  "history": [
+    {
+      "render_id": "ANTAR_0001_quietluxuryquotes",
+      "stage": "script",
+      "score": 100,
+      "words": 5,
+      "model": "offline/offline",
+      "at": 1791203647.4296281
+    },
+    {
+      "render_id": "ANTAR_0002_quietluxuryquotes",
+      "stage": "script",
+      "score": 100,
+      "words": 5,
+      "model": "offline/offline",
+      "at": 1791247968.043948
+    }
+  ]
+}

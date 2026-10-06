@@ -1,0 +1,126 @@
+{
+  "generated": 10,
+  "source": "offline pool",
+  "topics": [
+    {
+      "topic_hi": "Quiet luxury mindset",
+      "question_hi": "How to look rich without trying?",
+      "search_phrase_hi": "quiet luxury quotes",
+      "title_hi": "Quiet luxury is not loud",
+      "mechanism_hi": "Old money doesn't chase, it attracts",
+      "hook_angle": "luxury",
+      "structure": "quote-only",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    },
+    {
+      "topic_hi": "Main character energy",
+      "question_hi": "How to be main character?",
+      "search_phrase_hi": "main character energy",
+      "title_hi": "Main character energy",
+      "mechanism_hi": "You are the main character, not extra",
+      "hook_angle": "main-character",
+      "structure": "bold-statement",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    },
+    {
+      "topic_hi": "Old money doesn't chase",
+      "question_hi": "Why old money is different?",
+      "search_phrase_hi": "old money quotes",
+      "title_hi": "Old money doesn't chase",
+      "mechanism_hi": "Chasing is for new money",
+      "hook_angle": "luxury",
+      "structure": "quote-only",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    },
+    {
+      "topic_hi": "Less is more",
+      "question_hi": "Why minimal is luxury?",
+      "search_phrase_hi": "less is more quote",
+      "title_hi": "Less is more",
+      "mechanism_hi": "Minimalism is the ultimate luxury",
+      "hook_angle": "soft",
+      "structure": "quote-only",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    },
+    {
+      "topic_hi": "Self respect over attention",
+      "question_hi": "How to keep self respect?",
+      "search_phrase_hi": "self respect quotes",
+      "title_hi": "Self respect over attention",
+      "mechanism_hi": "Attention is cheap, respect is expensive",
+      "hook_angle": "bold",
+      "structure": "bold-statement",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    },
+    {
+      "topic_hi": "Not everyone gets access",
+      "question_hi": "Why set boundaries?",
+      "search_phrase_hi": "boundaries quotes",
+      "title_hi": "Not everyone gets access",
+      "mechanism_hi": "Privacy is luxury",
+      "hook_angle": "bold",
+      "structure": "quote+clip",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    },
+    {
+      "topic_hi": "Elegance is silent",
+      "question_hi": "What is true elegance?",
+      "search_phrase_hi": "elegance quotes",
+      "title_hi": "Elegance is silent",
+      "mechanism_hi": "Loud is cheap, silent is expensive",
+      "hook_angle": "luxury",
+      "structure": "quote-only",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    },
+    {
+      "topic_hi": "Main character doesn't compete",
+      "question_hi": "Why not compete?",
+      "search_phrase_hi": "main character quotes",
+      "title_hi": "Main character doesn't compete",
+      "mechanism_hi": "Main character creates own lane",
+      "hook_angle": "main-character",
+      "structure": "bold-statement",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    },
+    {
+      "topic_hi": "Old money is quiet",
+      "question_hi": "How old money behaves?",
+      "search_phrase_hi": "old money mindset",
+      "title_hi": "Old money is quiet",
+      "mechanism_hi": "Quiet moves, loud results",
+      "hook_angle": "luxury",
+      "structure": "quote-only",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    },
+    {
+      "topic_hi": "You are the standard",
+      "question_hi": "How to be standard?",
+      "search_phrase_hi": "self worth quotes",
+      "title_hi": "You are the standard",
+      "mechanism_hi": "Stop lowering standard for anyone",
+      "hook_angle": "bold",
+      "structure": "bold-statement",
+      "signal": "offline",
+      "ok": true,
+      "failures": []
+    }
+  ]
+}
